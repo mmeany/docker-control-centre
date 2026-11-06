@@ -481,6 +481,16 @@ mod tests {
     }
 }
 
+/// Integration tests that pull or remove hello-world take this, so one
+/// doesn't delete the image while another has a container using it.
+#[cfg(all(test, feature = "integration"))]
+pub async fn hello_world_lock() -> tokio::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+        .lock()
+        .await
+}
+
 /// Against a real engine: `cargo test --features integration` (uses DOCKER_HOST
 /// or the default address).
 #[cfg(all(test, feature = "integration"))]

@@ -3,12 +3,14 @@
 
 mod commands;
 mod compose;
+mod container_files;
 mod containers;
 mod engine;
 mod error;
 mod resources;
 mod settings;
 mod streams;
+mod tar;
 mod util;
 mod window;
 
@@ -58,6 +60,9 @@ pub fn run() {
             commands::streams::terminal_close,
             commands::streams::stream_stats,
             commands::window::open_popout,
+            commands::files::list_container_dir,
+            commands::files::copy_from_container,
+            commands::files::copy_into_container,
             commands::compose::compose_run,
             commands::compose::compose_check,
             commands::compose::wsl_distros,

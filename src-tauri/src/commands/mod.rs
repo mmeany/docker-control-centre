@@ -3,6 +3,7 @@
 
 pub mod compose;
 pub mod engine;
+pub mod files;
 pub mod resources;
 pub mod streams;
 pub mod window;

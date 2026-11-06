@@ -31,6 +31,7 @@ import type { Place } from "../../shell/places";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { applicable, summary, VERBS, working, type Verb } from "./actions";
 import { CHILDREN, containerPath, formatContainers, parseContainers, projectPath, type ChildId, type ContainersLoc } from "./paths";
+import { FilesView } from "./FilesView";
 import { LogsView } from "./LogsView";
 import { StatsView } from "./StatsView";
 import { ContainerPane, InspectChild, INSPECT_CHILDREN, ProjectPane, SelectionPane } from "./views";
@@ -522,7 +523,19 @@ export function useContainersSection(shell: Shell): SectionUi {
             </Suspense>
           );
         else if (loc.child === "stats") content = <StatsView key={container.id} container={container} onPopOut={popOut} />;
-        else content = <div className="empty-note center">The {child.name.toLowerCase()} view isn't built yet.</div>;
+        else if (loc.child === "files") {
+          const where = loc;
+          content = (
+            <FilesView
+              key={container.id}
+              container={container}
+              dir={`/${where.rest}`}
+              shell={shell}
+              openDir={(abs) => go(formatContainers({ ...where, rest: abs.replace(/^\/+/, "") }))}
+            />
+          );
+          status = `${container.name} · /${where.rest}`;
+        } else content = <div className="empty-note center">The {child.name.toLowerCase()} view isn't built yet.</div>;
       }
     }
     if (selected.size > 1) status += ` · ${selected.size} selected`;

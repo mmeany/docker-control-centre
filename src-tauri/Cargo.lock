@@ -691,6 +691,7 @@ name = "docker-control-centre"
 version = "0.1.0"
 dependencies = [
  "bollard",
+ "bytes",
  "futures-util",
  "serde",
  "serde_json",

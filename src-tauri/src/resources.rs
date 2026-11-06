@@ -594,6 +594,7 @@ mod integration {
         docker.remove_network(&id).await.expect("remove network");
 
         // Pull: progress folds to a final status.
+        let _hello = crate::engine::hello_world_lock().await;
         let had = docker.inspect_image("hello-world:latest").await.is_ok();
         let (image, t) = split_reference("hello-world");
         let mut events = Box::pin(

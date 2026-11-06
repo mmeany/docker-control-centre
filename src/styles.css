@@ -543,3 +543,7 @@ button { font: inherit; color: inherit; }
 .settings-grid .warn-note { grid-column: 1 / -1; }
 .settings-test { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .dialog pre.ok-note, .dialog pre.warn-note { white-space: pre-wrap; font-size: 11.5px; user-select: text; }
+
+/* ---------- Container files ---------- */
+.files-view.drop-target { outline: 2px dashed var(--drop); outline-offset: -4px; background: var(--drop-bg); }
+.files-note { margin: 4px 8px; }

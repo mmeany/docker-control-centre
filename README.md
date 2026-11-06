@@ -33,7 +33,9 @@ can reach it controls the engine and, through it, the machine. Only bind it to
   containers). Open a container for live logs (search, timestamps, time
   ranges, export), a terminal (bash or sh inside it), live stats, and its
   environment, mounts, ports, networks and labels. Logs, terminal and stats
-  can pop out into their own windows. Files are being built (see `PLAN.md`).
+  can pop out into their own windows. Browse a container's files (even in
+  images with no shell, or stopped containers), copy files out, and copy files
+  or folders in (or drag them in from Explorer).
   Lists update live from the engine's events.
 
 - **Compose:** projects that are running, plus compose files you pin so a

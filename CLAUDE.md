@@ -53,7 +53,9 @@ Minimise shipped dependencies; every addition needs a reason.
   state library, no chart library (stats draw SVG sparklines). Plain CSS.
 - Rust: `tauri`, `tauri-plugin-dialog`, `serde`, `serde_json`
   (`preserve_order`), `tokio` (sync, fs, io-util, rt, time), `bollard`
-  (features `http`, `pipe`: the Docker API), `futures-util` (streams). Disable
+  (features `http`, `pipe`: the Docker API), `futures-util` (streams), `bytes`
+  (archive uploads; already in the tree through bollard). Tar is our own
+  `tar.rs`, not a crate. Disable
   unneeded crate features. Run `cargo audit` before releases.
 - Native dialogs are opened from Rust commands (`pick_folder`,
   `pick_open_file`, `pick_save_file`), so there is no JS dialog plugin and no
@@ -82,7 +84,7 @@ src/state/engineList.ts     useEngineList: load + reload on a resource's changes
 src/sections/containers/    paths.ts (the @project/name/child path scheme), actions.ts (which
                             verbs apply to which states), views.tsx (inspect tables, details
                             pane), LogsView (one container or several merged) /
-                            TerminalView / StatsView, streamUtils.ts
+                            TerminalView / StatsView / FilesView, streamUtils.ts
                             (ranges, search, rates, sparklines), the section
 src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
                             openInNewTab, engine, ask,
@@ -96,6 +98,7 @@ src/api/app.ts              settings, filter history, values, native dialogs
 src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats channels; pop-out
 src/api/resources.ts        images (pull channel), volumes, networks
+src/api/files.ts            container folders, copy out / in
 src/api/compose.ts          compose runs (channel), pinned files, WSL distros
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
@@ -112,6 +115,9 @@ src-tauri/src/streams.rs    StreamRegistry (per window), log line splitting, UTF
                             stats maths (unit-tested)
 src-tauri/src/commands/streams.rs  logs, export, terminal (exec), stats commands
 src-tauri/src/commands/window.rs   pop-out windows (popout-N, ?popout=<address>)
+src-tauri/src/tar.rs        streaming tar reader (GNU long names, pax paths) and writer (unit-tested)
+src-tauri/src/container_files.rs  list (exec sh script, archive fallback), copy out / in
+src-tauri/src/commands/files.rs   list_container_dir, copy_from_container, copy_into_container
 src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, verbs (unit-tested)
 src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, save_text_file
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
@@ -202,6 +208,11 @@ new tab", and paths with their own parser (`isPath`).
   (`?popout=<address>`) shows one place, has no `shell.popOut`, and never
   reads or writes the session.
 - App shortcuts don't fire while focus is in a terminal (`.xterm`).
+- Container files: folders are addresses (`…/web-1/files/etc/nginx`). Listing
+  tries exec (a POSIX sh script with `stat`) and falls back to the archive API
+  (stopped containers, no shell; capped at 64 MB read). Copy out saves a file
+  as itself and a folder as .tar; copy in builds a tar in memory (512 MB cap).
+  Drops from Explorer use the template's `onFileDrop`.
 
 ## Testing
 
@@ -242,5 +253,5 @@ Details in `PLAN.md`.)
    preview, pull with progress.
 5. ✅ Compose: label discovery + pinned files, WSL / host runners, up / down /
    restart / pull, merged project logs, settings (WSL toggle, distro).
-6. Files inside containers: exec listing with archive fallback, copy in / out.
+6. ✅ Files inside containers: exec listing with archive fallback, copy in / out.
 7. Release: CI builds installers on tags, README, WSL setup docs; repo public.

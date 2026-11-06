@@ -66,6 +66,16 @@
   let engineChannel = null;
   let engineIndex = 0;
   let streamId = 0;
+  const fe = (name, kind, size = 0, mode = kind === "dir" ? "drwxr-xr-x" : "-rw-r--r--") => ({ name, kind, size, modified: iso(50), mode });
+  const cfs = {
+    "/": [fe("bin", "linkDir", 7, "lrwxrwxrwx"), fe("etc", "dir"), fe("tmp", "dir"), fe("usr", "dir"), fe("var", "dir"), fe(".dockerenv", "file")],
+    "/etc": [fe("nginx", "dir"), fe("hosts", "file", 174), fe("hostname", "file", 13), fe("os-release", "file", 267), fe("passwd", "file", 922)],
+    "/etc/nginx": [fe("conf.d", "dir"), fe("nginx.conf", "file", 648), fe("mime.types", "file", 5349)],
+    "/etc/nginx/conf.d": [fe("default.conf", "file", 1093)],
+    "/tmp": [],
+    "/usr": [],
+    "/var": [],
+  };
   let pinned = [{ name: "blog", file: "E:\\projects\\blog\\compose.yml" }];
   const timers = {};
   const terminals = {};
@@ -270,6 +280,21 @@
       });
       setTimeout(() => window.__engine({ type: "changed", resource: "network", action: "destroy", id: "" }), 10);
       return r;
+    },
+    // A small file system shared by every container; stopped ones list via the archive.
+    list_container_dir: (a) => {
+      const entries = cfs[a.path];
+      if (!entries) throw { kind: "notFound", message: `${a.path} doesn't exist.`, detail: "" };
+      return { path: a.path, entries, method: a.running ? "exec" : "archive", truncated: false };
+    },
+    copy_from_container: (a) => ({ savedAs: (cfs[a.path] ? "tar" : "file"), bytes: 1234 }),
+    copy_into_container: (a) => {
+      const now = new Date().toISOString();
+      for (const s of a.sources) {
+        const name = s.split(/[\\/]/).pop();
+        (cfs[a.dir] = cfs[a.dir] || []).push({ name, kind: "file", size: 42, modified: now, mode: "-rw-r--r--" });
+      }
+      return a.sources.length;
     },
     wsl_distros: () => [
       { name: "Ubuntu-Dev", default: true, running: true, version: 2 },

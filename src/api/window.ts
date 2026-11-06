@@ -6,7 +6,8 @@ import type { ThemePref } from "./core";
 
 export type Theme = "light" | "dark";
 
-const inTauri = "__TAURI_INTERNALS__" in window;
+// typeof guard: unit tests import this under Node, where there is no window.
+const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /** Browser fallback: the CSS media query, or null if it gives no answer. */
 function mediaTheme(): Theme | null {
