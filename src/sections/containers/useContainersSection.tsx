@@ -514,7 +514,7 @@ export function useContainersSection(shell: Shell): SectionUi {
         );
       } else {
         const popOut = shell.popOut ? () => shell.popOut!(placeOf(path)) : undefined;
-        if (loc.child === "logs") content = <LogsView key={container.id} container={container} shell={shell} onPopOut={popOut} />;
+        if (loc.child === "logs") content = <LogsView key={container.id} sources={[{ container, label: container.name }]} exportName={container.name} shell={shell} onPopOut={popOut} />;
         else if (loc.child === "terminal")
           content = (
             <Suspense fallback={<div className="empty-note">Loading the terminal…</div>}>

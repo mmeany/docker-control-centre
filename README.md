@@ -7,6 +7,15 @@ compose projects and containers as folders. Built with Tauri 2, React and Rust.
 See `CLAUDE.md` for the architecture, the rules, and how to add a section, and
 `PLAN.md` for the roadmap.
 
+## Compose and WSL
+
+With Docker Engine in WSL, `docker compose` has to run inside WSL: the engine
+resolves bind-mount paths on the Linux side. By default the app runs
+`wsl.exe [-d <distro>] --cd <project folder> -- docker compose …`, converting
+Windows paths (`E:\projects\shop` becomes `/mnt/e/projects/shop`). Choose the
+distro, or switch to running compose on this computer (Docker Desktop), in
+**Settings**; **Test** runs `docker compose version` the same way.
+
 ## Connecting to Docker
 
 The app uses `DOCKER_HOST` when it's set (`tcp://`, `npipe://` or `unix://`),
@@ -27,6 +36,10 @@ can reach it controls the engine and, through it, the machine. Only bind it to
   can pop out into their own windows. Files are being built (see `PLAN.md`).
   Lists update live from the engine's events.
 
+- **Compose:** projects that are running, plus compose files you pin so a
+  project stays listed while it's down. Up, stop, restart, pull and down
+  (deleting volumes needs the project name typed), with compose's output
+  shown as it runs, and every service's logs merged in time order.
 - **Images:** pull with per-layer progress, inspect (config, history, which
   containers use it), delete, and prune with a preview of exactly what goes.
 - **Volumes:** which containers use each, delete (type the name to confirm:

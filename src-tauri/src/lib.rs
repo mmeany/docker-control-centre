@@ -2,6 +2,7 @@
 //! Add a section's commands to `generate_handler!` below.
 
 mod commands;
+mod compose;
 mod containers;
 mod engine;
 mod error;
@@ -57,6 +58,13 @@ pub fn run() {
             commands::streams::terminal_close,
             commands::streams::stream_stats,
             commands::window::open_popout,
+            commands::compose::compose_run,
+            commands::compose::compose_check,
+            commands::compose::wsl_distros,
+            commands::compose::compose_pinned,
+            commands::compose::compose_pin,
+            commands::compose::compose_unpin,
+            commands::compose::save_text_file,
             commands::resources::list_images,
             commands::resources::inspect_image,
             commands::resources::remove_images,

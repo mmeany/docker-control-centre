@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogLine, StatsSample } from "../../api/streams";
-import { appendLines, findMatches, highlight, rangeQuery, rates, sparkline } from "./streamUtils";
+import { appendLines, findMatches, highlight, mergeByTime, rangeQuery, rates, sparkline, timeKey } from "./streamUtils";
 
 const line = (text: string): LogLine => ({ err: false, time: "", text });
 
@@ -57,5 +57,19 @@ describe("stats helpers", () => {
   it("draws sparklines inside the box", () => {
     expect(sparkline([0, 50, 100], 100, 20)).toBe("0.0,19.0 50.0,10.0 100.0,1.0");
     expect(sparkline([], 10, 10)).toBe("");
+  });
+});
+
+describe("merged logs", () => {
+  const l = (time: string, text: string) => ({ err: false, time, text });
+  it("orders times with fractions of any length", () => {
+    expect(timeKey("2026-11-06T17:04:19.1Z") < timeKey("2026-11-06T17:04:19.12Z")).toBe(true);
+    expect(timeKey("2026-11-06T17:04:19Z") < timeKey("2026-11-06T17:04:19.000000001Z")).toBe(true);
+  });
+
+  it("merges batches from several containers in time order", () => {
+    let lines = mergeByTime([], [l("2026-01-01T00:00:01Z", "a1"), l("2026-01-01T00:00:03Z", "a3")]);
+    lines = mergeByTime(lines, [l("2026-01-01T00:00:02.5Z", "b2"), l("2026-01-01T00:00:04Z", "b4"), l("2026-01-01T00:00:00Z", "b0")]);
+    expect(lines.map((x) => x.text)).toEqual(["b0", "a1", "b2", "a3", "b4"]);
   });
 });

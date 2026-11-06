@@ -1,6 +1,7 @@
 //! Tauri commands: the only surface the UI can call. Kept thin; logic lives in
 //! modules. App-level commands are here; each section has its own submodule.
 
+pub mod compose;
 pub mod engine;
 pub mod resources;
 pub mod streams;

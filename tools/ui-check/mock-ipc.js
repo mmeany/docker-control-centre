@@ -46,7 +46,8 @@
     ports: opts.ports ?? [],
     project: opts.project ?? null,
     service: opts.service ?? null,
-    workingDir: opts.project ? `/mnt/e/projects/${opts.project}` : null,
+    workingDir: opts.project ? `/home/mark/projects/${opts.project}` : null,
+    configFiles: opts.project ? [`/home/mark/projects/${opts.project}/compose.yml`] : [],
     imageId: imageIdOf(image),
     volumes: opts.volumes ?? [],
     networks: opts.project ? [`${opts.project}_default`] : ["bridge"],
@@ -65,6 +66,7 @@
   let engineChannel = null;
   let engineIndex = 0;
   let streamId = 0;
+  let pinned = [{ name: "blog", file: "E:\\projects\\blog\\compose.yml" }];
   const timers = {};
   const terminals = {};
   const channelIndex = {};
@@ -83,7 +85,7 @@
     forget_filter: (a) => (settings.filterHistory[a.key] = a.value === null ? [] : (settings.filterHistory[a.key] || []).filter((v) => v !== a.value)),
     set_value: (a) => (a.value === null ? delete settings.values[a.key] : (settings.values[a.key] = a.value), settings),
     pick_folder: () => null,
-    pick_open_file: () => null,
+    pick_open_file: () => "E:\\projects\\wiki\\compose.yml",
     pick_save_file: () => null,
     engine_info: () => ({
       name: "ubuntu-dev",
@@ -268,6 +270,42 @@
       });
       setTimeout(() => window.__engine({ type: "changed", resource: "network", action: "destroy", id: "" }), 10);
       return r;
+    },
+    wsl_distros: () => [
+      { name: "Ubuntu-Dev", default: true, running: true, version: 2 },
+      { name: "Ubuntu", default: false, running: false, version: 2 },
+    ],
+    compose_pinned: () => pinned,
+    compose_pin: (a) => {
+      const name = a.file.split(/[\\/]/).slice(-2, -1)[0].toLowerCase();
+      pinned = [...pinned.filter((p) => p.name !== name), { name, file: a.file }];
+      return pinned;
+    },
+    compose_unpin: (a) => (pinned = pinned.filter((p) => p.name !== a.name)),
+    compose_check: () => ({ code: 0, stdout: "Docker Compose version v2.40.3\n", stderr: "" }),
+    save_text_file: () => null,
+    compose_run: (a) => {
+      const id = ++streamId;
+      const project = a.target.name;
+      const lines = {
+        up: [`[+] Running 3/3`, ` ✔ Network ${project}_default  Created`, ` ✔ Container ${project}-db-1   Started`, ` ✔ Container ${project}-web-1  Started`],
+        down: [`[+] Running 3/3`, ` ✔ Container ${project}-web-1  Removed`, ` ✔ Network ${project}_default  Removed`],
+        restart: [` ✔ Container ${project}-web-1  Started`],
+        stop: [` ✔ Container ${project}-web-1  Stopped`],
+        pull: [` ✔ web Pulled`, ` ✔ db Pulled`],
+      }[a.verb.replace("-volumes", "")] ?? [];
+      send(a.onMessage, { type: "line", text: `> wsl.exe --cd ${a.target.dir} -- docker compose -p ${project} ${a.verb}`, err: false });
+      let i = 0;
+      timers[id] = setInterval(() => {
+        if (i < lines.length) send(a.onMessage, { type: "line", text: lines[i++], err: true });
+        else {
+          clearInterval(timers[id]);
+          if (a.verb.startsWith("down")) for (const c of containers) if (c.project === project) c.state = "exited";
+          send(a.onMessage, { type: "exit", code: 0, error: null });
+          window.__engine({ type: "changed", resource: "container", action: a.verb, id: "" });
+        }
+      }, 120);
+      return id;
     },
     open_popout: (a) => ((window.__popouts = [...(window.__popouts || []), a]), null),
     watch_engine: (a) => {

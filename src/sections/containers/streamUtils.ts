@@ -106,3 +106,24 @@ export function sparkline(values: number[], w: number, h: number, floor = 1): st
   const step = values.length > 1 ? w / (values.length - 1) : 0;
   return values.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * (h - 2) - 1).toFixed(1)}`).join(" ");
 }
+
+/** A sortable key for an RFC 3339 time whose fraction may be any length. */
+export function timeKey(t: string): string {
+  const m = /^(.*T\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)?$/.exec(t);
+  if (!m) return t;
+  return `${m[1]}.${(m[2] ?? "").padEnd(9, "0").slice(0, 9)}${m[3] ?? ""}`;
+}
+
+/** Merges new lines into lines already in time order (stable for equal times). */
+export function mergeByTime<T extends { time: string }>(old: T[], more: T[]): T[] {
+  const add = more.map((l, i) => ({ l, k: timeKey(l.time), i })).sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i));
+  if (add.length === 0) return old;
+  const out: T[] = [];
+  let i = 0;
+  for (const { l, k } of add) {
+    while (i < old.length && timeKey(old[i].time) <= k) out.push(old[i++]);
+    out.push(l);
+  }
+  while (i < old.length) out.push(old[i++]);
+  return out;
+}

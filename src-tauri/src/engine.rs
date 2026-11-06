@@ -16,6 +16,7 @@ const TIMEOUT_SECS: u64 = 30;
 pub const LABEL_PROJECT: &str = "com.docker.compose.project";
 pub const LABEL_SERVICE: &str = "com.docker.compose.service";
 pub const LABEL_WORKING_DIR: &str = "com.docker.compose.project.working_dir";
+pub const LABEL_CONFIG_FILES: &str = "com.docker.compose.project.config_files";
 
 /// How to reach the engine, parsed from a DOCKER_HOST-style URL.
 #[derive(Debug, Clone, PartialEq)]
@@ -195,6 +196,8 @@ pub struct ContainerItem {
     pub service: Option<String>,
     /// Compose project folder (a path on the engine's side).
     pub working_dir: Option<String>,
+    /// Compose files the project was started from (engine-side paths).
+    pub config_files: Vec<String>,
     /// Named or anonymous volumes it mounts (not bind mounts).
     pub volumes: Vec<String>,
     /// Networks it's attached to, by name.
@@ -243,6 +246,14 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         project: label(LABEL_PROJECT),
         service: label(LABEL_SERVICE),
         working_dir: label(LABEL_WORKING_DIR),
+        config_files: label(LABEL_CONFIG_FILES)
+            .map(|f| {
+                f.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -386,6 +397,10 @@ mod tests {
                 (LABEL_PROJECT.to_string(), "shop".to_string()),
                 (LABEL_SERVICE.to_string(), "web".to_string()),
                 (LABEL_WORKING_DIR.to_string(), "/mnt/e/shop".to_string()),
+                (
+                    LABEL_CONFIG_FILES.to_string(),
+                    "/mnt/e/shop/compose.yml,/mnt/e/shop/override.yml".to_string(),
+                ),
             ])),
             ..Default::default()
         };
@@ -397,6 +412,10 @@ mod tests {
         assert_eq!(item.project.as_deref(), Some("shop"));
         assert_eq!(item.service.as_deref(), Some("web"));
         assert_eq!(item.working_dir.as_deref(), Some("/mnt/e/shop"));
+        assert_eq!(
+            item.config_files,
+            vec!["/mnt/e/shop/compose.yml", "/mnt/e/shop/override.yml"]
+        );
 
         let bare = container_item(ContainerSummary {
             id: Some("abcdef0123456789".into()),

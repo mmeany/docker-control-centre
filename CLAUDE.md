@@ -37,9 +37,13 @@ milestones.
   no TLS / SSH yet). Rust keeps one change feed (`watch_engine`, a Tauri
   `Channel`) that reports connected / disconnected and changes per resource;
   sections reload when `shell.engine.changes.<resource>` moves. No polling.
-- **Compose (planned, M5):** a `ComposeRunner` with `WslRunner` (`wsl.exe -d
-  <distro> --cd <wsl path> -- docker compose ...`, needed for bind mounts) and
-  `HostRunner` (macOS / Linux).
+- **Compose:** `compose::Runner` is `Wsl { distro }` (`wsl.exe -d <distro>
+  --cd <wsl path> -- docker compose ...`, the default on Windows: a WSL engine
+  resolves bind mounts on the Linux side) or `Host`. Only allow-listed verbs
+  run (`compose::verb_args`). Paths convert both ways (`E:\x` <-> `/mnt/e/x`,
+  `\\wsl.localhost\<distro>\…`). wsl.exe's own messages are UTF-16LE
+  (`decode_output`). Projects come from container labels plus pinned compose
+  files (settings `compose.pinned`, named by `compose config`).
 
 ## Dependency policy
 
@@ -69,12 +73,16 @@ src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs
                             parent / uri helpers, controller hook)
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
 src/sections/images/, volumes/, networks/   one-level sections (list + item detail)
+src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
+                            RunDialog (streamed output), the section
+src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/sections/rules.ts       what uses what; prune candidates (unit-tested); flatPaths
 src/sections/common.tsx     NameList, PropsTable, UsedBy, runRemoval
 src/state/engineList.ts     useEngineList: load + reload on a resource's changes
 src/sections/containers/    paths.ts (the @project/name/child path scheme), actions.ts (which
                             verbs apply to which states), views.tsx (inspect tables, details
-                            pane), LogsView / TerminalView / StatsView, streamUtils.ts
+                            pane), LogsView (one container or several merged) /
+                            TerminalView / StatsView, streamUtils.ts
                             (ranges, search, rates, sparklines), the section
 src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
                             openInNewTab, engine, ask,
@@ -88,6 +96,7 @@ src/api/app.ts              settings, filter history, values, native dialogs
 src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats channels; pop-out
 src/api/resources.ts        images (pull channel), volumes, networks
+src/api/compose.ts          compose runs (channel), pinned files, WSL distros
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
@@ -103,6 +112,8 @@ src-tauri/src/streams.rs    StreamRegistry (per window), log line splitting, UTF
                             stats maths (unit-tested)
 src-tauri/src/commands/streams.rs  logs, export, terminal (exec), stats commands
 src-tauri/src/commands/window.rs   pop-out windows (popout-N, ?popout=<address>)
+src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, verbs (unit-tested)
+src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, save_text_file
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
 src-tauri/src/commands/resources.rs  list, inspect, remove (per-item results), pull
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
@@ -229,7 +240,7 @@ Details in `PLAN.md`.)
    stats, pop-out windows.
 4. ✅ Images, volumes, networks: lists, inspect, remove, prune with dry-run
    preview, pull with progress.
-5. Compose: label discovery + pinned files, WSL / host runners, up / down /
+5. ✅ Compose: label discovery + pinned files, WSL / host runners, up / down /
    restart / pull, merged project logs, settings (WSL toggle, distro).
 6. Files inside containers: exec listing with archive fallback, copy in / out.
 7. Release: CI builds installers on tags, README, WSL setup docs; repo public.

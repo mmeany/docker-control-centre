@@ -30,6 +30,8 @@ export interface ContainerItem {
   project: string | null;
   service: string | null;
   workingDir: string | null;
+  /** Compose files it was started from (engine-side paths). */
+  configFiles: string[];
   /** Volumes it mounts, by name. */
   volumes: string[];
   /** Networks it's on, by name. */

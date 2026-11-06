@@ -4,8 +4,9 @@
 // each render, in this order, so the list must not change at runtime.
 import type { ReactNode } from "react";
 import { createElement } from "react";
-import { ContainerIcon, ImageIcon, NetworkIcon, VolumeIcon } from "../components/Icons";
+import { ContainerIcon, ImageIcon, NetworkIcon, ProjectIcon, VolumeIcon } from "../components/Icons";
 import type { SectionUi, Shell } from "../shell/shell";
+import { composePaths, useComposeSection } from "./compose/useComposeSection";
 import { containersCrumbs, containersParent, isContainersPath, useContainersSection } from "./containers/useContainersSection";
 import { imagesPaths, useImagesSection } from "./images/useImagesSection";
 import { networksPaths, useNetworksSection } from "./networks/useNetworksSection";
@@ -41,6 +42,15 @@ export const SECTIONS: SectionDef[] = [
     parent: containersParent,
     isPath: isContainersPath,
     use: useContainersSection,
+  },
+  {
+    id: "compose",
+    name: "Compose",
+    description: "Compose projects, running or pinned: up, stop, restart, pull, down, and every service's logs merged",
+    icon: createElement(ProjectIcon),
+    root: "",
+    ...composePaths,
+    use: useComposeSection,
   },
   {
     id: "images",

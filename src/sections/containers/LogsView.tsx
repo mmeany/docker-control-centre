@@ -1,27 +1,42 @@
-// A container's logs: live tail, search, timestamps, ranges, export.
+// Logs for one container, or several merged in time order (a compose
+// project, each line marked with its service): live tail, search,
+// timestamps, ranges, export.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appApi } from "../../api/app";
 import type { AppError } from "../../api/core";
+import { composeApi } from "../../api/compose";
 import type { ContainerItem } from "../../api/engine";
 import { streamsApi, type LogLine } from "../../api/streams";
 import type { Shell } from "../../shell/shell";
-import { appendLines, findMatches, highlight, rangeQuery, RANGES, shortTime, type RangeId } from "./streamUtils";
+import { colourOf } from "../compose/projects";
+import { appendLines, findMatches, highlight, mergeByTime, rangeQuery, RANGES, shortTime, type RangeId } from "./streamUtils";
 
 /** Must match .log-line height in styles.css. */
 const LINE_H = 18;
 const OVERSCAN = 20;
 
-interface Props {
+/** A container to show, and the label its lines get when merged. */
+export interface LogSource {
   container: ContainerItem;
+  label: string;
+}
+
+type Line = LogLine & { src: number };
+
+interface Props {
+  sources: LogSource[];
+  /** File name (without .log) offered when exporting. */
+  exportName: string;
   shell: Shell;
   /** Pops this view out into its own window (absent when already popped out). */
   onPopOut?: () => void;
 }
 
-export function LogsView({ container, shell, onPopOut }: Props) {
+export function LogsView({ sources, exportName, shell, onPopOut }: Props) {
+  const merged = sources.length > 1;
   const [range, setRange] = useState<RangeId>("tail");
   const [custom, setCustom] = useState({ from: "", to: "" });
-  const [lines, setLines] = useState<LogLine[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
   const [dropped, setDropped] = useState(0);
   const [ended, setEnded] = useState<{ error: string | null } | null>(null);
   const [error, setError] = useState<AppError | null>(null);
@@ -32,9 +47,12 @@ export function LogsView({ container, shell, onPopOut }: Props) {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(400);
   const body = useRef<HTMLDivElement>(null);
-  const pending = useRef<LogLine[]>([]);
+  const pending = useRef<Line[]>([]);
 
-  const running = container.state === "running" || container.state === "paused" || container.state === "restarting";
+  const isUp = (c: ContainerItem) => c.state === "running" || c.state === "paused" || c.state === "restarting";
+  const running = sources.some((s) => isUp(s.container));
+  // Restart the streams when the set of containers or their running state changes.
+  const sourceKey = sources.map((s) => `${s.container.id}:${isUp(s.container)}`).join(",");
   const query = useMemo(() => rangeQuery(range, Math.floor(Date.now() / 1000), custom), [range, custom]);
 
   // (Re)start the stream when the range changes or the container starts again.
@@ -43,8 +61,9 @@ export function LogsView({ container, shell, onPopOut }: Props) {
       setLines([]);
       return;
     }
-    let stream: number | null = null;
+    const streams: number[] = [];
     let live = true;
+    let endedCount = 0;
     let frame = 0;
     setLines([]);
     setDropped(0);
@@ -57,30 +76,34 @@ export function LogsView({ container, shell, onPopOut }: Props) {
       const more = pending.current;
       pending.current = [];
       setLines((old) => {
-        const r = appendLines(old, more);
+        const r = appendLines(merged ? [] : old, merged ? mergeByTime(old, more) : more);
         if (r.dropped) setDropped((d) => d + r.dropped);
-        return r.lines;
+        return r.lines as Line[];
       });
     };
-    streamsApi
-      .logs(container.id, query, (m) => {
-        if (!live) return;
-        if (m.type === "lines") {
-          pending.current.push(...m.lines);
-          if (!frame) frame = requestAnimationFrame(flush);
-        } else setEnded({ error: m.error });
-      })
-      .then((id) => {
-        if (live) stream = id;
-        else void streamsApi.stop(id).catch(() => {});
-      })
-      .catch((e) => live && setError(e as AppError));
+    sources.forEach((s, src) => {
+      streamsApi
+        .logs(s.container.id, query, (m) => {
+          if (!live) return;
+          if (m.type === "lines") {
+            for (const l of m.lines) pending.current.push({ ...l, src });
+            if (!frame) frame = requestAnimationFrame(flush);
+          } else if (m.error) setEnded({ error: merged ? `${s.label}: ${m.error}` : m.error });
+          else if (++endedCount === sources.length) setEnded({ error: null });
+        })
+        .then((id) => {
+          if (live) streams.push(id);
+          else void streamsApi.stop(id).catch(() => {});
+        })
+        .catch((e) => live && setError(e as AppError));
+    });
     return () => {
       live = false;
       if (frame) cancelAnimationFrame(frame);
-      if (stream !== null) void streamsApi.stop(stream).catch(() => {});
+      for (const id of streams) void streamsApi.stop(id).catch(() => {});
     };
-  }, [container.id, query, running, range, custom.from]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey, query, range, custom.from]);
 
   useEffect(() => {
     const el = body.current;
@@ -109,11 +132,17 @@ export function LogsView({ container, shell, onPopOut }: Props) {
 
   async function exportLogs() {
     try {
-      // Container names are [a-zA-Z0-9_.-]: already safe as file names.
-      const path = await appApi.pickSaveFile("Save logs", `${container.name}.log`);
+      // Container and project names are [a-zA-Z0-9_.-]: already safe as file names.
+      const path = await appApi.pickSaveFile("Save logs", `${exportName}.log`);
       if (!path) return;
       shell.setWorking("Saving logs…");
-      const n = await streamsApi.exportLogs(container.id, query, timestamps, path);
+      let n: number;
+      if (merged) {
+        // What's on screen, merged, written as shown.
+        const text = lines.map((l) => `${timestamps && l.time ? `${l.time} ` : ""}${sources[l.src].label} | ${l.text}\n`).join("");
+        await composeApi.saveText(path, text);
+        n = lines.length;
+      } else n = await streamsApi.exportLogs(sources[0].container.id, query, timestamps, path);
       shell.showFlash(`Saved ${n.toLocaleString()} lines to ${path}`);
     } catch (e) {
       shell.showError(e);
@@ -130,7 +159,8 @@ export function LogsView({ container, shell, onPopOut }: Props) {
   if (error) note = error.message;
   else if (ended?.error) note = ended.error;
   else if (range === "custom" && !custom.from) note = "Choose when the range starts.";
-  else if (ended && query.follow && !running) note = "The container isn't running. New lines appear when it starts.";
+  else if (ended && query.follow && !running)
+    note = merged ? "None of these containers is running. New lines appear when they start." : "The container isn't running. New lines appear when it starts.";
   else if (ended && !query.follow) note = "End of the range.";
 
   return (
@@ -169,7 +199,7 @@ export function LogsView({ container, shell, onPopOut }: Props) {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> Follow
         </label>
         <div className="spacer" />
-        <button className="btn" onClick={() => void exportLogs()} title="Save this range to a file">
+        <button className="btn" onClick={() => void exportLogs()} title={merged ? "Save the lines shown to a file" : "Save this range to a file"}>
           Export…
         </button>
         {onPopOut && (
@@ -197,6 +227,7 @@ export function LogsView({ container, shell, onPopOut }: Props) {
             return (
               <div key={n} className={`log-line ${l.err ? "err" : ""} ${n === hit ? "current" : ""}`} style={{ top: n * LINE_H }}>
                 {timestamps && <span className="log-time">{shortTime(l.time)}</span>}
+                {merged && <span className={`log-src svc-${colourOf(sources[l.src].label)}`}>{sources[l.src].label}</span>}
                 {highlight(l.text, search).map((p, j) => (p.hit ? <mark key={j}>{p.text}</mark> : <span key={j}>{p.text}</span>))}
               </div>
             );

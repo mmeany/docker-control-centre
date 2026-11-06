@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
 import type { ViewMode } from "./FileList";
 import { HOME, placeCrumbs, type Place } from "../shell/places";
-import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
+import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, GearIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
 
 export interface TabInfo {
   id: number;
@@ -35,6 +35,7 @@ interface Props {
   /** Bumped to put the address bar into edit mode (Ctrl+L, Alt+D). */
   editToken: number;
   onThemeChange: (theme: ThemePref) => void;
+  onOpenSettings: () => void;
   onRefresh: () => void;
   onCopyLocation: () => void;
   onBack: () => void;
@@ -87,6 +88,9 @@ export function Toolbar(p: Props) {
         </div>
         <div className="spacer" />
         {p.busy && <span className="busy">Working…</span>}
+        <button className="cmd-btn" title="Settings: where compose runs" onClick={p.onOpenSettings}>
+          <GearIcon /> <span className="cmd-label">Settings</span>
+        </button>
         <label className="field-label" htmlFor="theme">
           Theme:
         </label>

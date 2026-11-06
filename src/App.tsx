@@ -23,6 +23,7 @@ import { useEngine } from "./state/engine";
 import { useEngineList } from "./state/engineList";
 import { DETAILS_PANE_KEY, readSession, readViews, SESSION_KEY, VIEWS_KEY, withView, type SavedSession } from "./state/session";
 import { useTabs } from "./state/tabs";
+import { SettingsDialog } from "./settings/SettingsDialog";
 import { useTheme } from "./state/theme";
 
 /** Shown in the toolbar; the window title comes from tauri.conf.json. */
@@ -87,6 +88,7 @@ export default function App() {
   const [homeSelected, setHomeSelected] = useState<Set<string>>(new Set());
   const flashTimer = useRef<number | undefined>(undefined);
   const [editAddress, setEditAddress] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const nav = useTabs<Place>(POPOUT_PLACE ?? HOME, samePlace);
   const place = nav.current;
   const engine = useEngine();
@@ -388,6 +390,17 @@ export default function App() {
 
   const overlays = (
     <>
+      {settingsOpen && settings && (
+        <SettingsDialog
+          settings={settings}
+          onSaved={setSettings}
+          onClose={() => {
+            setSettingsOpen(false);
+            // The compose section reads the distro for showing paths.
+            active?.refresh();
+          }}
+        />
+      )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       {SECTIONS.map((s) => (
         <div key={s.id} style={{ display: "contents" }}>
@@ -462,6 +475,7 @@ export default function App() {
         busy={working !== null || (active?.busy ?? false)}
         theme={themePref}
         onThemeChange={(t) => void changeTheme(t)}
+        onOpenSettings={() => setSettingsOpen(true)}
         place={place}
         canBack={nav.canBack}
         canForward={nav.canForward}
