@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-06)
 
 - **Status colours:** containers, compose projects, images, volumes and
   networks are coloured by state everywhere (tree, lists, tiles, tabs,
