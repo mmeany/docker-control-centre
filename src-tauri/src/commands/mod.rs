@@ -2,6 +2,7 @@
 //! modules. App-level commands are here; each section has its own submodule.
 
 pub mod engine;
+pub mod resources;
 pub mod streams;
 pub mod window;
 

@@ -18,7 +18,9 @@ import { SECTIONS } from "./sections";
 import { HOME, parentPlace, parseAddress, placeCrumbs, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
 import type { SectionUi, Shell } from "./shell/shell";
 import { streamsApi } from "./api/streams";
+import { engineApi } from "./api/engine";
 import { useEngine } from "./state/engine";
+import { useEngineList } from "./state/engineList";
 import { DETAILS_PANE_KEY, readSession, readViews, SESSION_KEY, VIEWS_KEY, withView, type SavedSession } from "./state/session";
 import { useTabs } from "./state/tabs";
 import { useTheme } from "./state/theme";
@@ -88,6 +90,7 @@ export default function App() {
   const nav = useTabs<Place>(POPOUT_PLACE ?? HOME, samePlace);
   const place = nav.current;
   const engine = useEngine();
+  const containers = useEngineList(engine, engine.changes.container, engineApi.listContainers);
   const homeLabel = engine.info?.name ?? "Docker";
   const treeRef = useRef<HTMLDivElement>(null);
 
@@ -209,6 +212,7 @@ export default function App() {
           streamsApi.openPopout(placeUri(p), title).catch((e) => showError(e));
         },
     engine,
+    containers,
     view,
     ask,
     askName,

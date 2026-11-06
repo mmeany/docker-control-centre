@@ -180,6 +180,8 @@ pub struct ContainerItem {
     /// Without the leading "/".
     pub name: String,
     pub image: String,
+    /// "sha256:…": links the container to its image.
+    pub image_id: String,
     /// created, running, paused, restarting, exited, removing, dead.
     pub state: String,
     /// Human status from the engine ("Up 3 hours", "Exited (0) 2 days ago").
@@ -193,6 +195,10 @@ pub struct ContainerItem {
     pub service: Option<String>,
     /// Compose project folder (a path on the engine's side).
     pub working_dir: Option<String>,
+    /// Named or anonymous volumes it mounts (not bind mounts).
+    pub volumes: Vec<String>,
+    /// Networks it's attached to, by name.
+    pub networks: Vec<String>,
 }
 
 pub fn container_item(c: ContainerSummary) -> ContainerItem {
@@ -210,10 +216,26 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         .and_then(|s| u64::try_from(s).ok())
         .map(|s| crate::util::iso8601(SystemTime::UNIX_EPOCH + Duration::from_secs(s)))
         .unwrap_or_default();
+    let volumes = c
+        .mounts
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| m.typ.as_deref() == Some("volume"))
+        .filter_map(|m| m.name)
+        .collect();
+    let mut networks: Vec<String> = c
+        .network_settings
+        .and_then(|n| n.networks)
+        .map(|n| n.into_keys().collect())
+        .unwrap_or_default();
+    networks.sort();
     ContainerItem {
         id: c.id.unwrap_or_default(),
         name,
         image: c.image.unwrap_or_default(),
+        image_id: c.image_id.unwrap_or_default(),
+        volumes,
+        networks,
         state: c.state.map(|s| s.to_string()).unwrap_or_default(),
         status: c.status.unwrap_or_default(),
         created,

@@ -506,3 +506,12 @@ button { font: inherit; color: inherit; }
 
 /* ---------- Pop-out windows ---------- */
 .app.popout .pane-main { border-top: 1px solid var(--border); }
+
+/* ---------- Images, volumes, networks ---------- */
+.pull-summary { display: flex; justify-content: space-between; gap: 12px; }
+.pull-layers { margin-top: 10px; max-height: 260px; overflow: auto; border: 1px solid var(--border-light); background: var(--pane); }
+.pull-layer { display: grid; grid-template-columns: 110px 1fr 150px; gap: 8px; padding: 2px 8px; }
+.pull-layer .hint { text-align: right; }
+.data-table tr.link-row:hover td { background: var(--hover); cursor: default; }
+.detail-view h3 { font-size: 12px; font-weight: 600; margin: 14px 0 4px; }
+.detail-view .data-table-wrap { max-height: none; }

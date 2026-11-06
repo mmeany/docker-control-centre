@@ -5,6 +5,7 @@ mod commands;
 mod containers;
 mod engine;
 mod error;
+mod resources;
 mod settings;
 mod streams;
 mod util;
@@ -56,6 +57,14 @@ pub fn run() {
             commands::streams::terminal_close,
             commands::streams::stream_stats,
             commands::window::open_popout,
+            commands::resources::list_images,
+            commands::resources::inspect_image,
+            commands::resources::remove_images,
+            commands::resources::pull_image,
+            commands::resources::list_volumes,
+            commands::resources::remove_volumes,
+            commands::resources::list_networks,
+            commands::resources::remove_networks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the app");

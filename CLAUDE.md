@@ -68,6 +68,10 @@ src/App.tsx                 shell: theme, layout, history, shared dialogs; runs 
 src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs /
                             parent / uri helpers, controller hook)
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
+src/sections/images/, volumes/, networks/   one-level sections (list + item detail)
+src/sections/rules.ts       what uses what; prune candidates (unit-tested); flatPaths
+src/sections/common.tsx     NameList, PropsTable, UsedBy, runRemoval
+src/state/engineList.ts     useEngineList: load + reload on a resource's changes
 src/sections/containers/    paths.ts (the @project/name/child path scheme), actions.ts (which
                             verbs apply to which states), views.tsx (inspect tables, details
                             pane), LogsView / TerminalView / StatsView, streamUtils.ts
@@ -83,6 +87,7 @@ src/api/core.ts             `call` (invoke wrapper), AppError, Settings
 src/api/app.ts              settings, filter history, values, native dialogs
 src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats channels; pop-out
+src/api/resources.ts        images (pull channel), volumes, networks
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
@@ -98,6 +103,8 @@ src-tauri/src/streams.rs    StreamRegistry (per window), log line splitting, UTF
                             stats maths (unit-tested)
 src-tauri/src/commands/streams.rs  logs, export, terminal (exec), stats commands
 src-tauri/src/commands/window.rs   pop-out windows (popout-N, ?popout=<address>)
+src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
+src-tauri/src/commands/resources.rs  list, inspect, remove (per-item results), pull
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
 src-tauri/src/engine.rs     Endpoint (DOCKER_HOST), Engine, error mapping, DTOs and
                             mapping from bollard models (unit-tested)
@@ -172,7 +179,13 @@ new tab", and paths with their own parser (`isPath`).
   Alt+Enter properties, Ctrl+T new tab, Ctrl+W close tab, Ctrl+Tab /
   Ctrl+Shift+Tab switch tab, Ctrl+L / Alt+D type an address, Ctrl+Shift+5 /
   6 / 7 list / details / tiles, Alt+Shift+P details pane.
-- Engine lists reload from `shell.engine.changes`, never on a timer.
+- Engine lists reload from `shell.engine.changes`, never on a timer. The
+  container list is shared as `shell.containers` (other sections show what
+  uses what from it).
+- Prune has no dry run in the engine: the preview is computed in
+  `sections/rules.ts` and exactly those items are removed, one by one.
+  Volumes are deleted with a typed confirmation; Docker's own networks
+  (bridge, host, none) can't be deleted.
 - Streams: start returns an id; stop it in the effect cleanup. Rust stops a
   window's streams, terminals and feed when it closes. A pop-out window
   (`?popout=<address>`) shows one place, has no `shell.popOut`, and never
@@ -214,7 +227,7 @@ Details in `PLAN.md`.)
    children (env, mounts, ports, networks, labels), session restore.
 3. ✅ Logs (follow, search, timestamps, since / until, export), exec terminal,
    stats, pop-out windows.
-4. Images, volumes, networks: lists, inspect, remove, prune with dry-run
+4. ✅ Images, volumes, networks: lists, inspect, remove, prune with dry-run
    preview, pull with progress.
 5. Compose: label discovery + pinned files, WSL / host runners, up / down /
    restart / pull, merged project logs, settings (WSL toggle, distro).

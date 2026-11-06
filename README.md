@@ -27,6 +27,13 @@ can reach it controls the engine and, through it, the machine. Only bind it to
   can pop out into their own windows. Files are being built (see `PLAN.md`).
   Lists update live from the engine's events.
 
+- **Images:** pull with per-layer progress, inspect (config, history, which
+  containers use it), delete, and prune with a preview of exactly what goes.
+- **Volumes:** which containers use each, delete (type the name to confirm:
+  the data is gone for good), prune unused or only anonymous volumes.
+- **Networks:** subnets, attached containers, delete and prune; Docker's own
+  networks are left alone.
+
 Tabs, the view chosen for each place, the details pane and the window's size
 and position come back the next time you start the app.
 

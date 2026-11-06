@@ -4,9 +4,12 @@
 // each render, in this order, so the list must not change at runtime.
 import type { ReactNode } from "react";
 import { createElement } from "react";
-import { ContainerIcon } from "../components/Icons";
+import { ContainerIcon, ImageIcon, NetworkIcon, VolumeIcon } from "../components/Icons";
 import type { SectionUi, Shell } from "../shell/shell";
 import { containersCrumbs, containersParent, isContainersPath, useContainersSection } from "./containers/useContainersSection";
+import { imagesPaths, useImagesSection } from "./images/useImagesSection";
+import { networksPaths, useNetworksSection } from "./networks/useNetworksSection";
+import { useVolumesSection, volumesPaths } from "./volumes/useVolumesSection";
 
 export interface SectionDef {
   id: string;
@@ -38,5 +41,32 @@ export const SECTIONS: SectionDef[] = [
     parent: containersParent,
     isPath: isContainersPath,
     use: useContainersSection,
+  },
+  {
+    id: "images",
+    name: "Images",
+    description: "Images on the engine: pull, inspect, see what uses them, delete and prune",
+    icon: createElement(ImageIcon),
+    root: "",
+    ...imagesPaths,
+    use: useImagesSection,
+  },
+  {
+    id: "volumes",
+    name: "Volumes",
+    description: "Named and anonymous volumes, and the containers using them",
+    icon: createElement(VolumeIcon),
+    root: "",
+    ...volumesPaths,
+    use: useVolumesSection,
+  },
+  {
+    id: "networks",
+    name: "Networks",
+    description: "Networks, their subnets and the containers attached",
+    icon: createElement(NetworkIcon),
+    root: "",
+    ...networksPaths,
+    use: useNetworksSection,
   },
 ];

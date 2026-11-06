@@ -276,3 +276,47 @@ export function RestartIcon({ size = 16 }: P) {
     </svg>
   );
 }
+
+/** An image: stacked layers. */
+export function ImageIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M8 9.5 L14.5 6.5 L8 3.5 L1.5 6.5 Z" fill="#c9d9f0" stroke="#4a6fa5" strokeWidth="0.8" strokeLinejoin="round" />
+      <path d="M1.5 9 L8 12 L14.5 9" fill="none" stroke="#4a6fa5" strokeWidth="0.9" strokeLinejoin="round" />
+      <path d="M1.5 11.5 L8 14.5 L14.5 11.5" fill="none" stroke="#4a6fa5" strokeWidth="0.9" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** A volume: a disk cylinder. */
+export function VolumeIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M2.5 4 V12 C2.5 13.4 13.5 13.4 13.5 12 V4" fill="#e3d6f2" stroke="#6a4f99" strokeWidth="0.8" />
+      <ellipse cx="8" cy="4" rx="5.5" ry="1.8" fill="#efe6f9" stroke="#6a4f99" strokeWidth="0.8" />
+      <path d="M2.5 8 C2.5 9.4 13.5 9.4 13.5 8" fill="none" stroke="#6a4f99" strokeWidth="0.6" />
+    </svg>
+  );
+}
+
+/** A network: connected nodes. */
+export function NetworkIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M8 4 V8 M8 8 L3.5 12 M8 8 L12.5 12" stroke="#2f7d6d" strokeWidth="1" />
+      <circle cx="8" cy="3.5" r="2.2" fill="#cfeee6" stroke="#2f7d6d" strokeWidth="0.8" />
+      <circle cx="3.5" cy="12.5" r="2.2" fill="#cfeee6" stroke="#2f7d6d" strokeWidth="0.8" />
+      <circle cx="12.5" cy="12.5" r="2.2" fill="#cfeee6" stroke="#2f7d6d" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+/** Prune: a broom. */
+export function PruneIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M12.5 1.5 L8 8" stroke="#8a6a3a" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M5 7.5 L10 9.5 L8.5 14.5 L2 12 Z" fill="#e8c46a" stroke="#a87a12" strokeWidth="0.8" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -109,10 +109,7 @@ export function useContainersSection(shell: Shell): SectionUi {
   const placeOf = (p: string): Place => ({ section: SECTION, path: p });
 
   const [open, setOpen] = useState(true);
-  const [items, setItems] = useState<ContainerItem[] | null>(null);
-  const [error, setError] = useState<AppError | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [reloadToken, setReloadToken] = useState(0);
+  const { items, error, loading, refresh } = shell.containers;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   /** Selection belongs to the path it was made in. */
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
@@ -122,26 +119,6 @@ export function useContainersSection(shell: Shell): SectionUi {
 
   const connected = engine.status === "connected";
 
-  // Load (and reload on container events, reconnects and Refresh).
-  useEffect(() => {
-    if (!connected) return;
-    let stale = false;
-    setLoading(true);
-    engineApi
-      .listContainers()
-      .then((list) => {
-        if (stale) return;
-        setItems(list);
-        setError(null);
-      })
-      .catch((e) => !stale && setError(e as AppError))
-      .finally(() => !stale && setLoading(false));
-    return () => {
-      stale = true;
-    };
-  }, [connected, engine.changes.container, reloadToken]);
-
-  const refresh = useCallback(() => setReloadToken((t) => t + 1), []);
 
   const { projects, standalone } = useMemo(() => {
     const byProject = new Map<string, ContainerItem[]>();

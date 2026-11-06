@@ -19,6 +19,8 @@ export interface ContainerItem {
   id: string;
   name: string;
   image: string;
+  /** "sha256:…". */
+  imageId: string;
   state: ContainerState;
   /** "Up 3 hours", "Exited (0) 2 days ago". */
   status: string;
@@ -28,6 +30,10 @@ export interface ContainerItem {
   project: string | null;
   service: string | null;
   workingDir: string | null;
+  /** Volumes it mounts, by name. */
+  volumes: string[];
+  /** Networks it's on, by name. */
+  networks: string[];
 }
 
 export type ContainerAction =

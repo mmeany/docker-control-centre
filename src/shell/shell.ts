@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import type { ConfirmButton } from "../components/ConfirmDialog";
 import type { MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
+import type { ContainerItem } from "../api/engine";
 import type { EngineState } from "../state/engine";
+import type { EngineList } from "../state/engineList";
 import type { Place } from "./places";
 
 /** What the app shell provides to every section. */
@@ -15,6 +17,8 @@ export interface Shell {
   popOut?: (p: Place) => void;
   /** Connection, engine info and change counters. */
   engine: EngineState;
+  /** Every container (shared: sections show what uses what). */
+  containers: EngineList<ContainerItem>;
   /** View chosen for this place (pass to FileList). */
   view: ViewMode;
   /** Modal question; resolves with the chosen button's value. */
