@@ -162,6 +162,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
       note={engine.status === "connected" ? "Loading…" : "Not connected"}
       emptyText="No volumes"
       selected={active ? path : null}
+      level={shell.treeLevel}
       rootSelected={active && !path}
       onRoot={() => go("")}
       onOpen={go}

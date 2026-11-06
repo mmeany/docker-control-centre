@@ -161,6 +161,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
       note={engine.status === "connected" ? "Loading…" : "Not connected"}
       emptyText="No networks"
       selected={active ? path : null}
+      level={shell.treeLevel}
       rootSelected={active && !path}
       onRoot={() => go("")}
       onOpen={go}

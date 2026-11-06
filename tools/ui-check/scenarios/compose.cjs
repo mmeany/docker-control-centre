@@ -2,6 +2,8 @@
 // pinning, the down confirmation, and Settings.
 module.exports = async (page, { shot }) => {
   await page.waitForSelector(".status-bar:has-text('ubuntu-dev · tcp://localhost:2375')");
+  // Pinned projects that are down show from "Running and stopped".
+  await page.selectOption("#tree-level", "stopped");
   await page.click(".tree-row:has-text('Compose')");
   await page.waitForSelector(".fl-row:has-text('blog') >> text=Down");
   await page.waitForSelector(".fl-row:has-text('Ubuntu-Dev')"); // WSL paths shown as Windows ones

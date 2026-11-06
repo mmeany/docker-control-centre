@@ -80,6 +80,7 @@ src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/status/                 status.ts: one state model for containers, projects, images,
                             volumes, networks (unit-tested); LegendDialog
+src/status/filter.ts        tree Show levels on the status states; partition + "+ n more" (unit-tested)
 src/components/StatusMark.tsx  the mark per state (shape + colour); SectionBadge counts
 src/sections/ResourceTree.tsx  tree branch with an "Orphaned (n)" folder
 src/sections/rules.ts       what uses what; prune candidates (unit-tested); flatPaths
@@ -218,6 +219,10 @@ new tab", and paths with their own parser (`isPath`).
   styles.css, light and dark). Give tree rows and list rows a `status`; never
   colour by raw state. Prune candidates are built on the same model, so
   orange is exactly what "Orphaned only" removes.
+- The tree (only) is filtered by `shell.treeLevel` with `partition()` from
+  `status/filter.ts`: always keep the open item, end a branch with `TreeMore`
+  ("+ n more") that reveals it until collapsed, reset reveals when the level
+  changes. Badges count everything. Main lists are never filtered.
 - Container files: folders are addresses (`…/web-1/files/etc/nginx`). Listing
   tries exec (a POSIX sh script with `stat`) and falls back to the archive API
   (stopped containers, no shell; capped at 64 MB read). Copy out saves a file
@@ -272,3 +277,7 @@ Details in `PLAN.md`.)
    orphaned, error marks and colours in the tree, lists, tabs and details
    pane; project roll-ups; "Orphaned (n)" folders; section badges; Help ›
    Legend; "Orphaned only" prune.
+9. ✅ Tree filtering (see PLAN.md, M9): the tree shows running items
+   and problems by default; a Show control (Running, Running and stopped,
+   Everything) relaxes it; "+ n more" rows reveal a branch; main lists
+   unfiltered; the open item always shows; level remembered app-wide.

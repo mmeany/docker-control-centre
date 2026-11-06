@@ -21,6 +21,7 @@ import { streamsApi } from "./api/streams";
 import { composeApi, type Pinned } from "./api/compose";
 import { engineApi } from "./api/engine";
 import { liveProjects } from "./status/status";
+import { readTreeLevel, TREE_LEVEL_KEY, TREE_LEVELS, type TreeLevel } from "./status/filter";
 import { StatusMark, statusTip } from "./components/StatusMark";
 import { attentionText } from "./components/SectionBadge";
 import { useEngine } from "./state/engine";
@@ -119,6 +120,7 @@ export default function App() {
   // then are saved (debounced) whenever they change.
   const [views, setViews] = useState<Record<string, ViewMode>>({});
   const [detailsPane, setDetailsPane] = useState(false);
+  const [treeLevel, setTreeLevel] = useState<TreeLevel>("running");
   const [restored, setRestored] = useState(false);
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export default function App() {
         if (session && !POPOUT_PLACE) nav.restore(session.places, session.active);
         setViews(readViews(s.values[VIEWS_KEY]));
         setDetailsPane(s.values[DETAILS_PANE_KEY] === true);
+        setTreeLevel(readTreeLevel(s.values[TREE_LEVEL_KEY]));
       })
       .catch(() => setSettings({ theme: "system", filterHistory: {}, values: {} }))
       .finally(() => setRestored(true));
@@ -157,6 +160,10 @@ export default function App() {
     },
     [views, place],
   );
+  const changeTreeLevel = (level: TreeLevel) => {
+    setTreeLevel(level);
+    appApi.setValue(TREE_LEVEL_KEY, level).catch(() => {});
+  };
   const toggleDetailsPane = useCallback(() => {
     setDetailsPane((v) => {
       appApi.setValue(DETAILS_PANE_KEY, !v).catch(() => {});
@@ -234,6 +241,7 @@ export default function App() {
     composePinned,
     setComposePinned,
     liveProjects: live,
+    treeLevel,
     view,
     ask,
     askName,
@@ -563,6 +571,24 @@ export default function App() {
       />
       <div className="panes">
         <div className="pane-tree" style={{ width: treeWidth }} ref={treeRef}>
+          <div className="tree-show">
+            <label className="field-label" htmlFor="tree-level">
+              Show:
+            </label>
+            <select
+              id="tree-level"
+              className="select"
+              value={treeLevel}
+              title={TREE_LEVELS.find((l) => l.id === treeLevel)?.title}
+              onChange={(e) => changeTreeLevel(e.target.value as TreeLevel)}
+            >
+              {TREE_LEVELS.map((l) => (
+                <option key={l.id} value={l.id} title={l.title}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="tree" role="tree">
             <TreeRow depth={0} label={homeLabel} icon={<ServerIcon />} title={engine.info?.endpoint} selected={place.section === null} expanded onClick={() => nav.navigate(HOME)}>
               {SECTIONS.map((s) => (

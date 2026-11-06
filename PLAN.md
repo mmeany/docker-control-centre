@@ -200,3 +200,80 @@ details pane, all with the same colours and marks.
    - Screenshots reviewed for contrast in both themes.
    - The mock gains a crashed container, an unhealthy one, orphaned volumes
      and networks, and an idle image.
+
+## M9: Tree filtering (agreed 2026-11-06)
+
+By default the left tree shows only what's live, so it stays short. A Show
+control relaxes it in three steps, and each branch says what it's hiding.
+The main lists are not filtered.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| Default | Running items, plus anything with a problem (a crash that just happened stays visible) |
+| Non-runners | Images, volumes and networks count as running when a running container uses them; projects when any of their containers runs |
+| Control | "Show:" above the tree, with three levels: Running, Running and stopped, Everything. One setting for the whole tree |
+| Hint | Each branch ends with a muted "+ n more" row, e.g. "+ 3 stopped". Clicking it reveals that branch until you collapse it |
+| Main lists | Not filtered: opening a section lists everything |
+| Hidden but open | The open item (and its branch) shows in the tree while it's open |
+| Remembered | App-wide, saved with the session; a new install starts at Running |
+
+### Levels
+
+Each level includes everything from the level before it.
+
+| Level | Containers, projects | Images, volumes, networks |
+|---|---|---|
+| Running | running, starting, paused, restarting, partly running, problem | in use (by a running container) |
+| Running and stopped | adds stopped, plus pinned projects that are down | adds idle (used only by stopped containers) |
+| Everything | (nothing more) | adds unused and orphaned, and the Orphaned (n) folders |
+
+These are defined on the M8 status states, so the filter and the colours
+always agree.
+
+### Behaviour
+
+- **Branches:** project folders under Containers and Compose are filtered
+  too. A partly running project shows its running containers and
+  "+ 1 stopped".
+- **Badges:** section badges (problems, orphans) always count everything, so
+  hidden orphans still show as "Volumes 2▲" at the Running level.
+- **Empty branches:** a section with nothing at the current level still shows
+  its node, with only the "+ n more" row. When it has nothing at all, it
+  shows the existing empty note ("No volumes").
+- **Hint wording:** the "+ n more" row names what it hides when that's a
+  single kind ("+ 3 stopped", "+ 2 orphaned"), and says "+ n more" when it
+  mixes kinds.
+- **Reveal:** clicking the row reveals that branch at Everything; collapsing
+  the branch drops back to the global level. Reveals aren't saved.
+- **Changing level:** changing the Show level clears any reveals.
+- **Open item:** the open item is shown whatever the level, with its parent
+  project expanded, and drops out again when you navigate away.
+
+### Work
+
+1. **Filter model** (`src/status/filter.ts`, pure, unit-tested):
+   - `TreeLevel = "running" | "stopped" | "all"`.
+   - `visibleAt(level, status)` decides whether an item shows.
+   - `hiddenSummary(statuses)` produces the "+ 3 stopped" / "+ n more" text.
+2. **Shell:**
+   - `shell.treeLevel`, saved in settings values (`app.treeLevel`) with the
+     session; the default is `running`.
+   - The Show control above the tree is a small select styled like the
+     theme picker, with a tooltip explaining each level.
+3. **Tree:**
+   - `ResourceTree`, the Containers tree and the Compose tree take the level.
+     They filter their children, add the "+ n more" row, and track revealed
+     branches locally.
+   - The open item is always kept visible.
+4. **Tests:**
+   - Unit tests for the level table, including the edge cases: a problem
+     container shows at Running, an orphan only at Everything, an idle image
+     at Running and stopped, a down pinned project at Running and stopped.
+   - A `filter` ui:check scenario in both themes. It checks the default
+     view, the "+ n more" counts, revealing and collapsing a branch, each
+     level, an opened hidden item, that badges are unchanged, and that the
+     choice is restored after a reload.
+5. **Docs:** README (the tree section), CHANGELOG (Unreleased) and
+   CLAUDE.md.

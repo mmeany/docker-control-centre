@@ -4,6 +4,8 @@
 module.exports = async (page, { shot }) => {
   await page.waitForSelector(".status-bar:has-text('ubuntu-dev · tcp://localhost:2375')");
   const label = (row, state) => page.waitForSelector(`.tree-row:has-text('${row}') .tree-label.st-${state}`);
+  // Show everything: this scenario checks every state's colours.
+  await page.selectOption("#tree-level", "all");
 
   // Containers: crashes and failing health checks are red; clean stops grey.
   await label("redis-scratch", "error");

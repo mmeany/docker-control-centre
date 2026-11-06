@@ -65,6 +65,21 @@ export function TreeRow({ depth, label, icon, selected, expanded, title, data, m
   );
 }
 
+/** "+ 3 stopped": what a branch hides at the current Show level. Click to reveal. */
+export function TreeMore({ depth, children, onClick }: { depth: number; children: ReactNode; onClick: () => void }) {
+  return (
+    <div
+      className="tree-row tree-more"
+      role="treeitem"
+      style={{ paddingLeft: 4 + depth * TREE_INDENT + 18 }}
+      title="Show everything in this branch (collapse it to hide them again)"
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Italic informational row inside the tree ("Loading…"). */
 export function TreeNote({ depth, children }: { depth: number; children: ReactNode }) {
   return (

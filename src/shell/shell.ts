@@ -4,6 +4,7 @@ import type { MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
 import type { Pinned } from "../api/compose";
 import type { ContainerItem } from "../api/engine";
+import type { TreeLevel } from "../status/filter";
 import type { Status } from "../status/status";
 import type { EngineState } from "../state/engine";
 import type { EngineList } from "../state/engineList";
@@ -26,6 +27,8 @@ export interface Shell {
   setComposePinned: (list: Pinned[]) => void;
   /** Compose projects that exist: with containers, or pinned. */
   liveProjects: Set<string>;
+  /** How much the tree shows (Show control); lists aren't filtered. */
+  treeLevel: TreeLevel;
   /** View chosen for this place (pass to FileList). */
   view: ViewMode;
   /** Modal question; resolves with the chosen button's value. */

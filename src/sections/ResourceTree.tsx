@@ -1,9 +1,12 @@
 // The tree branch shared by Images, Volumes and Networks: the items with
-// their status marks, orphans grouped in an "Orphaned (n)" folder (shown only
-// when there are any), and a badge on the section node.
-import { useState, type ReactNode } from "react";
+// their status marks, filtered by the Show level (the open item always
+// shows), a "+ n more" row that reveals the rest, orphans grouped in an
+// "Orphaned (n)" folder, and a badge on the section node (which counts
+// everything, hidden or not).
+import { useEffect, useState, type ReactNode } from "react";
 import { SectionBadge } from "../components/SectionBadge";
-import { TreeNote, TreeRow } from "../components/TreeRow";
+import { TreeMore, TreeNote, TreeRow } from "../components/TreeRow";
+import { partition, type TreeLevel } from "../status/filter";
 import type { Status } from "../status/status";
 
 export interface TreeItem {
@@ -20,17 +23,28 @@ interface Props {
   note: string;
   emptyText: string;
   selected: string | null;
+  level: TreeLevel;
   rootSelected: boolean;
   onRoot: () => void;
   onOpen: (key: string) => void;
   onMenu: (key: string, x: number, y: number) => void;
 }
 
-export function ResourceTree({ label, icon, items, note, emptyText, selected, rootSelected, onRoot, onOpen, onMenu }: Props) {
+export function ResourceTree({ label, icon, items, note, emptyText, selected, level, rootSelected, onRoot, onOpen, onMenu }: Props) {
   const [open, setOpen] = useState(false);
   const [orphansOpen, setOrphansOpen] = useState(true);
-  const orphans = (items ?? []).filter((i) => i.status.state === "orphaned");
-  const rest = (items ?? []).filter((i) => i.status.state !== "orphaned");
+  const [revealed, setRevealed] = useState(false);
+  // A new Show level starts afresh.
+  useEffect(() => setRevealed(false), [level]);
+  // Opening the open item's section shows it in the tree.
+  useEffect(() => {
+    if (selected && (items ?? []).some((i) => i.key === selected)) setOpen(true);
+  }, [selected, items]);
+  const all = items ?? [];
+  const { shown, summary } = partition(all, (i) => i.status, revealed ? "all" : level, (i) => i.key === selected);
+  const orphanCount = all.filter((i) => i.status.state === "orphaned").length;
+  const orphans = shown.filter((i) => i.status.state === "orphaned");
+  const rest = shown.filter((i) => i.status.state !== "orphaned");
   const row = (i: TreeItem, depth: number) => (
     <TreeRow
       key={i.key}
@@ -48,11 +62,15 @@ export function ResourceTree({ label, icon, items, note, emptyText, selected, ro
       depth={1}
       label={label}
       icon={icon}
-      badge={<SectionBadge errors={0} orphans={orphans.length} />}
+      badge={<SectionBadge errors={0} orphans={orphanCount} />}
       selected={rootSelected}
       expanded={open}
       onClick={onRoot}
-      onToggle={() => setOpen((v) => !v)}
+      onToggle={() => {
+        // Collapsing drops a reveal back to the Show level.
+        if (open) setRevealed(false);
+        setOpen((v) => !v);
+      }}
     >
       {items === null ? (
         <TreeNote depth={2}>{note}</TreeNote>
@@ -73,6 +91,11 @@ export function ResourceTree({ label, icon, items, note, emptyText, selected, ro
             >
               {orphans.map((i) => row(i, 3))}
             </TreeRow>
+          )}
+          {summary && (
+            <TreeMore depth={2} onClick={() => setRevealed(true)}>
+              {summary}
+            </TreeMore>
           )}
         </>
       )}

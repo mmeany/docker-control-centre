@@ -40,6 +40,12 @@ paused or partly running, red for a crash or failing health check, blue idle
 (safe to prune). The tree counts problems and orphans per section, and
 **Help › What the colours mean** explains each one.
 
+The tree shows only what's live by default: running containers, anything
+with a problem, and what running containers use. **Show:** above the tree
+relaxes it to *Running and stopped* or *Everything*, and each branch ends
+with a "+ n more" row that reveals the rest of that branch. Lists in the main
+pane always show everything.
+
 Lists update live from the engine's events. Tabs, the view for each place,
 the details pane and the window's size and position come back next time.
 

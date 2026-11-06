@@ -11,7 +11,8 @@ import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
 import { ContainerIcon, DeleteIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon } from "../../components/Icons";
-import { TreeNote, TreeRow } from "../../components/TreeRow";
+import { TreeMore, TreeNote, TreeRow } from "../../components/TreeRow";
+import { partition } from "../../status/filter";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { NameList, PropsTable } from "../common";
 import { containerPath } from "../containers/paths";
@@ -101,6 +102,10 @@ export function useComposeSection(shell: Shell): SectionUi {
   const projects = useMemo(() => projectsFrom(shell.containers.items ?? [], pinned), [shell.containers.items, pinned]);
   const byName = useMemo(() => new Map(projects.map((p) => [p.name, p])), [projects]);
   const statusOf = (p: Project) => projectStatus(p.containers, p.pinned !== null);
+  // Show level: the open project always shows; "+ n more" reveals the rest.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => setRevealed(false), [shell.treeLevel]);
+  const treeProjects = partition(projects, statusOf, revealed ? "all" : shell.treeLevel, (p) => p.name === projectName);
   const sectionAttention = useMemo(() => ({ ...attention(projects.map((p) => projectStatus(p.containers, p.pinned !== null))), orphans: 0 }), [projects]);
   const current = projectName ? byName.get(projectName) : undefined;
   const single = selected.size === 1 && !projectName ? byName.get([...selected][0]) : undefined;
@@ -270,25 +275,35 @@ export function useComposeSection(shell: Shell): SectionUi {
       selected={active && !projectName}
       expanded={open}
       onClick={() => go("")}
-      onToggle={() => setOpen((v) => !v)}
+      onToggle={() => {
+        if (open) setRevealed(false);
+        setOpen((v) => !v);
+      }}
     >
       {shell.containers.items === null ? (
         <TreeNote depth={2}>{engine.status === "connected" ? "Loading…" : "Not connected"}</TreeNote>
       ) : projects.length === 0 ? (
         <TreeNote depth={2}>No projects</TreeNote>
       ) : (
-        projects.map((p) => (
-          <TreeRow
-            key={p.name}
-            depth={2}
-            label={p.name}
-            icon={<ProjectIcon />}
-            status={statusOf(p)}
-            selected={active && projectName === p.name}
-            onClick={() => go(p.name)}
-            onContextMenu={(x, y) => openMenu(p.name, x, y)}
-          />
-        ))
+        <>
+          {treeProjects.shown.map((p) => (
+            <TreeRow
+              key={p.name}
+              depth={2}
+              label={p.name}
+              icon={<ProjectIcon />}
+              status={statusOf(p)}
+              selected={active && projectName === p.name}
+              onClick={() => go(p.name)}
+              onContextMenu={(x, y) => openMenu(p.name, x, y)}
+            />
+          ))}
+          {treeProjects.summary && (
+            <TreeMore depth={2} onClick={() => setRevealed(true)}>
+              {treeProjects.summary}
+            </TreeMore>
+          )}
+        </>
       )}
     </TreeRow>
   );

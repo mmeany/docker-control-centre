@@ -25,7 +25,8 @@ import {
   StopIcon,
   TerminalIcon,
 } from "../../components/Icons";
-import { TreeNote, TreeRow } from "../../components/TreeRow";
+import { TreeMore, TreeNote, TreeRow } from "../../components/TreeRow";
+import { hiddenSummary, partition } from "../../status/filter";
 import { formatDate } from "../../format";
 import type { Place } from "../../shell/places";
 import type { SectionUi, Shell } from "../../shell/shell";
@@ -47,6 +48,8 @@ const LIVE_CHILDREN: ChildId[] = ["logs", "terminal", "stats"];
 export { containersCrumbs, containersParent, isContainersPath } from "./paths";
 
 const SECTION = "containers";
+/** The section's own branch, in `revealed`. */
+const ROOT = "/"; // project names never contain /
 
 const COLUMNS: Column[] = [
   { id: "name", label: "Name", width: 240 },
@@ -114,6 +117,9 @@ export function useContainersSection(shell: Shell): SectionUi {
   const [open, setOpen] = useState(true);
   const { items, error, loading, refresh } = shell.containers;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** Branches revealed with "+ n more" (ROOT, or a project name). */
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  useEffect(() => setRevealed(new Set()), [shell.treeLevel]);
   /** Selection belongs to the path it was made in. */
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
@@ -421,6 +427,26 @@ export function useContainersSection(shell: Shell): SectionUi {
     );
   };
 
+  // Show level: the open container and its project always show; a "+ n more"
+  // row reveals a branch until it's collapsed.
+  const openName = isInContainer(loc) ? loc.name : null;
+  const openProject = loc && loc.kind !== "root" ? loc.project : null;
+  const rootLevel = revealed.has(ROOT) ? "all" : shell.treeLevel;
+  const levelIn = (project: string) => (revealed.has(project) ? "all" : rootLevel);
+  const reveal = (key: string) => setRevealed((s) => new Set([...s, key]));
+  const unreveal = (key: string) =>
+    setRevealed((s) => {
+      const n = new Set(s);
+      n.delete(key);
+      return n;
+    });
+  const topProjects = partition(projects, (p) => projectStatus(p.containers, pinnedNames.has(p.name)), rootLevel, (p) => p.name === openProject);
+  const topStandalone = partition(standalone, containerStatus, rootLevel, (c) => c.name === openName);
+  const topHidden = hiddenSummary([
+    ...topProjects.hidden.map((p) => projectStatus(p.containers, pinnedNames.has(p.name))),
+    ...topStandalone.hidden.map(containerStatus),
+  ]);
+
   let treeBody: ReactNode;
   if (!connected && items === null) treeBody = <TreeNote depth={2}>{engine.status === "connecting" ? "Connecting…" : "Not connected"}</TreeNote>;
   else if (items === null) treeBody = <TreeNote depth={2}>Loading…</TreeNote>;
@@ -428,7 +454,9 @@ export function useContainersSection(shell: Shell): SectionUi {
   else
     treeBody = (
       <>
-        {projects.map((p) => (
+        {topProjects.shown.map((p) => {
+          const inner = partition(p.containers, containerStatus, levelIn(p.name), (c) => c.name === openName);
+          return (
           <TreeRow
             key={p.name}
             depth={2}
@@ -438,20 +466,32 @@ export function useContainersSection(shell: Shell): SectionUi {
             selected={active && loc?.kind === "project" && loc.project === p.name}
             expanded={expanded.has(p.name)}
             onClick={() => go(projectPath(p.name))}
-            onToggle={() =>
+            onToggle={() => {
+              if (expanded.has(p.name)) unreveal(p.name);
               setExpanded((s) => {
                 const n = new Set(s);
                 if (n.has(p.name)) n.delete(p.name);
                 else n.add(p.name);
                 return n;
-              })
-            }
+              });
+            }}
             onContextMenu={(x, y) => openContextMenu(projectPath(p.name), x, y)}
           >
-            {p.containers.map((c) => containerNode(c, 3))}
+            {inner.shown.map((c) => containerNode(c, 3))}
+            {inner.summary && (
+              <TreeMore depth={3} onClick={() => reveal(p.name)}>
+                {inner.summary}
+              </TreeMore>
+            )}
           </TreeRow>
-        ))}
-        {standalone.map((c) => containerNode(c, 2))}
+          );
+        })}
+        {topStandalone.shown.map((c) => containerNode(c, 2))}
+        {topHidden && (
+          <TreeMore depth={2} onClick={() => reveal(ROOT)}>
+            {topHidden}
+          </TreeMore>
+        )}
       </>
     );
 
@@ -464,7 +504,10 @@ export function useContainersSection(shell: Shell): SectionUi {
       selected={active && loc?.kind === "root"}
       expanded={open}
       onClick={() => go("")}
-      onToggle={() => setOpen((v) => !v)}
+      onToggle={() => {
+        if (open) unreveal(ROOT);
+        setOpen((v) => !v);
+      }}
     >
       {treeBody}
     </TreeRow>

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Tree filtering:** the tree shows running items and problems by default.
+  **Show:** relaxes it to Running and stopped, or Everything; "+ n more"
+  rows reveal a branch until it's collapsed. The open item always shows,
+  badges still count everything, and the choice is remembered.
+
 ## 0.2.0 (2026-11-06)
 
 - **Status colours:** containers, compose projects, images, volumes and
