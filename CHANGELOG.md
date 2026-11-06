@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-06)
 
 - **Tree filtering:** the tree shows running items and problems by default.
   **Show:** relaxes it to Running and stopped, or Everything; "+ n more"
