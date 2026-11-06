@@ -37,7 +37,8 @@ module.exports = async (page, { shot }) => {
 
   // Settings: distros listed, test runs compose version.
   await page.click(".cmd-btn:has-text('Settings')");
-  await page.waitForSelector("#distro option:has-text('Ubuntu-Dev')");
+  // Options in a closed <select> are never "visible": wait for them to exist.
+  await page.waitForSelector("#distro option:has-text('Ubuntu-Dev')", { state: "attached" });
   await page.click(".dialog .btn:has-text('Test')");
   await page.waitForSelector(".dialog .ok-note:has-text('Docker Compose version')");
   await shot("settings");

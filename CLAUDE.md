@@ -129,7 +129,9 @@ src-tauri/src/error.rs      AppError {kind, message, detail}; AppError::io
 src-tauri/src/settings.rs   Settings + SettingsStore (atomic write)
 src-tauri/src/util.rs       iso8601 (no date crate), safe_file_name
 tools/ui-check/             headless UI checks with the IPC mocked
-scripts/rename.mjs          one-off: name the app, optionally drop the sample
+scripts/check-version.mjs   versions in package.json / Cargo.toml / tauri.conf.json (and a tag) match
+app-icon.svg                icon source: `npx tauri icon app-icon.svg` (then drop icons/android, icons/ios)
+docs/                       WSL-SETUP.md, screenshots (from ui:check)
 ```
 
 ### Shared components
@@ -254,4 +256,7 @@ Details in `PLAN.md`.)
 5. ✅ Compose: label discovery + pinned files, WSL / host runners, up / down /
    restart / pull, merged project logs, settings (WSL toggle, distro).
 6. ✅ Files inside containers: exec listing with archive fallback, copy in / out.
-7. Release: CI builds installers on tags, README, WSL setup docs; repo public.
+7. ✅ Release: tag-triggered installer builds (draft release), version check,
+   app icon, README with screenshots, WSL setup guide, changelog. Repo still
+   private: `gh repo edit mmeany/docker-control-centre --visibility public
+   --accept-visibility-change-consequences` when ready.

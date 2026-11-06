@@ -1,0 +1,83 @@
+name: Release
+
+# Push a tag like v0.1.0 (matching the version in package.json, Cargo.toml and
+# tauri.conf.json) to build installers and attach them to a draft release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Versions match the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/check-version.mjs "${{ github.ref_name }}"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Unit tests
+        working-directory: src-tauri
+        run: cargo test
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows is the target platform: it must build.
+          - platform: windows-latest
+            required: true
+          # macOS and Linux build on a best-effort basis.
+          - platform: macos-latest
+            required: false
+          - platform: ubuntu-22.04
+            required: false
+    runs-on: ${{ matrix.platform }}
+    continue-on-error: ${{ !matrix.required }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Docker Control Centre ${{ github.ref_name }}"
+          releaseBody: |
+            Unsigned builds: Windows SmartScreen warns on first run (More info, then Run anyway).
+            See the README for connecting to Docker Engine in WSL.
+          releaseDraft: true
+          prerelease: false

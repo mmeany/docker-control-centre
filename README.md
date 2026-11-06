@@ -1,47 +1,31 @@
 # Docker Control Centre
 
-A Windows-first desktop app for managing a Docker engine the way File
-Explorer manages files: tabs, a tree, an address bar you can type into, and
-compose projects and containers as folders. Built with Tauri 2, React and Rust.
+A Windows desktop app for managing a Docker engine the way File Explorer
+manages files: tabs, a tree, an address bar you can type into, and compose
+projects, containers, images, volumes and networks as folders. Built for
+Docker Engine running in WSL (no Docker Desktop needed). Tauri 2, React and
+Rust.
 
-See `CLAUDE.md` for the architecture, the rules, and how to add a section, and
-`PLAN.md` for the roadmap.
+![Containers, with the details pane](docs/screenshots/containers.png)
 
-## Compose and WSL
-
-With Docker Engine in WSL, `docker compose` has to run inside WSL: the engine
-resolves bind-mount paths on the Linux side. By default the app runs
-`wsl.exe [-d <distro>] --cd <project folder> -- docker compose …`, converting
-Windows paths (`E:\projects\shop` becomes `/mnt/e/projects/shop`). Choose the
-distro, or switch to running compose on this computer (Docker Desktop), in
-**Settings**; **Test** runs `docker compose version` the same way.
-
-## Connecting to Docker
-
-The app uses `DOCKER_HOST` when it's set (`tcp://`, `npipe://` or `unix://`),
-and `tcp://localhost:2375` otherwise. That default suits Docker Engine running
-in WSL with its API published on localhost.
-
-**Security:** port 2375 is the Docker API with no authentication. Anyone who
-can reach it controls the engine and, through it, the machine. Only bind it to
-`localhost`, never to `0.0.0.0` on a network you don't trust.
-
-## Sections
+## Features
 
 - **Containers:** compose projects and standalone containers. Start, stop,
   restart, pause, kill and delete them (a project stands for all of its
-  containers). Open a container for live logs (search, timestamps, time
-  ranges, export), a terminal (bash or sh inside it), live stats, and its
-  environment, mounts, ports, networks and labels. Logs, terminal and stats
-  can pop out into their own windows. Browse a container's files (even in
-  images with no shell, or stopped containers), copy files out, and copy files
-  or folders in (or drag them in from Explorer).
-  Lists update live from the engine's events.
+  containers). Open a container for:
+  - **Logs:** live tail, search, timestamps, time ranges, export.
+  - **Terminal:** bash or sh inside the container.
+  - **Stats:** CPU, memory, network, disk and processes, live.
+  - **Files:** browse its folders (even in images with no shell, or stopped
+    containers), copy files out, copy files or folders in, or drag them in
+    from Explorer.
+  - **Environment, mounts, ports, networks, labels.**
 
-- **Compose:** projects that are running, plus compose files you pin so a
-  project stays listed while it's down. Up, stop, restart, pull and down
-  (deleting volumes needs the project name typed), with compose's output
-  shown as it runs, and every service's logs merged in time order.
+  Logs, terminal and stats can pop out into their own windows.
+- **Compose:** running projects, plus compose files you pin so a project
+  stays listed while it's down. Up, stop, restart, pull and down (deleting
+  volumes needs the project name typed), with compose's output as it runs,
+  and every service's logs merged in time order.
 - **Images:** pull with per-layer progress, inspect (config, history, which
   containers use it), delete, and prune with a preview of exactly what goes.
 - **Volumes:** which containers use each, delete (type the name to confirm:
@@ -49,59 +33,42 @@ can reach it controls the engine and, through it, the machine. Only bind it to
 - **Networks:** subnets, attached containers, delete and prune; Docker's own
   networks are left alone.
 
-Tabs, the view chosen for each place, the details pane and the window's size
-and position come back the next time you start the app.
+Lists update live from the engine's events. Tabs, the view for each place,
+the details pane and the window's size and position come back next time.
 
-## Prerequisites (developer machine only)
-
-- Node.js 20+ (LTS)
-- Rust (stable, MSVC toolchain on Windows) + Microsoft C++ Build Tools
-- WebView2: already part of Windows 10/11
-
-End users need none of these: the built app is a single native executable.
-
-## Run
-
-```
-npm install
-npm run tauri dev
-```
-
-The first build compiles the Rust dependencies and takes a few minutes; later
-builds are incremental.
-
-## Check the UI without the native app
-
-```
-npm i -D playwright && npx playwright install chromium   # once
-npm run ui:check -- --both
-```
-
-This runs the scenarios in `tools/ui-check/scenarios` against the Vite dev
-server, with the Tauri IPC mocked by `tools/ui-check/mock-ipc.js`. Screenshots
-go to `tools/ui-check/out/`. The check fails on console errors or on commands
-with no mock.
-
-## Build a distributable
-
-```
-npm run tauri build
-```
-
-| Output | Use |
+| | |
 |---|---|
-| `src-tauri\target\release\bundle\nsis\<Name>_<version>_x64-setup.exe` | Installer: Start menu entry and uninstaller; no admin rights needed by default |
-| `src-tauri\target\release\bundle\msi\<Name>_<version>_x64_en-US.msi` | MSI installer, for IT / Group Policy deployment |
-| `src-tauri\target\release\<slug>.exe` | The app as a single file; runs without installing |
+| ![A compose project's logs, merged](docs/screenshots/compose-logs.png) | ![Live stats](docs/screenshots/stats.png) |
+| Every service's logs, merged | Live stats |
+| ![Pulling an image](docs/screenshots/pull.png) | |
+| Pulling an image | |
 
-To build only the setup program: `npm run tauri build -- --bundles nsis`.
+## Install
 
-- **Not code-signed:** Windows SmartScreen warns on first run (More info →
-  Run anyway). Signing needs a certificate, configured under
-  `bundle.windows` in `src-tauri/tauri.conf.json`.
-- **Version:** `version` in `src-tauri/tauri.conf.json`. Raise it for each
-  release so installers upgrade cleanly.
-- **Before a release:** run `cargo audit` in `src-tauri`.
+Download the installer from the
+[latest release](../../releases/latest) (`…_x64-setup.exe`, or the `.msi`
+for managed deployment). Builds aren't code-signed yet, so Windows
+SmartScreen warns on first run: **More info**, then **Run anyway**.
+
+## Connecting to Docker
+
+The app uses `DOCKER_HOST` when it's set (`tcp://`, `npipe://` or `unix://`),
+and `tcp://localhost:2375` otherwise. That default suits Docker Engine in WSL
+with its API published on localhost: **[docs/WSL-SETUP.md](docs/WSL-SETUP.md)**
+walks through setting that up.
+
+**Security:** port 2375 is the Docker API with no authentication. Anyone who
+can reach it controls the engine and, through it, the machine. Only bind it to
+`localhost`, never to `0.0.0.0`.
+
+### Compose and WSL
+
+With Docker Engine in WSL, `docker compose` has to run inside WSL: the engine
+resolves bind-mount paths on the Linux side. By default the app runs
+`wsl.exe [-d <distro>] --cd <project folder> -- docker compose …`, converting
+Windows paths (`E:\projects\shop` becomes `/mnt/e/projects/shop`). Choose the
+distro, or switch to running compose on this computer (Docker Desktop), in
+**Settings**; **Test** runs `docker compose version` the same way.
 
 ## Keyboard shortcuts
 
@@ -116,6 +83,64 @@ To build only the setup program: `npm run tauri build -- --bundles nsis`.
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+L, Alt+D | Type an address (e.g. `/containers/@shop/shop-web-1`) |
 | Middle-click a tab | Close it |
-| Del | Delete the selected containers (asks first) |
+| Del | Delete the selected items (asks first) |
 | Ctrl+Shift+5 / 6 / 7 | List / details / tiles view |
 | Alt+Shift+P | Show or hide the details pane |
+
+In a terminal, the shell gets every key (Ctrl+W, Ctrl+L, …).
+
+## Development
+
+See `CLAUDE.md` for the architecture, the rules and how to add a section,
+`PLAN.md` for the decisions behind it, and `CHANGELOG.md` for what changed.
+
+### Prerequisites
+
+- Node.js 20+ (LTS)
+- Rust (stable, MSVC toolchain on Windows) + Microsoft C++ Build Tools
+- WebView2: already part of Windows 10/11
+
+### Run
+
+```
+npm install
+npm run tauri dev
+```
+
+The first build compiles the Rust dependencies and takes a few minutes; later
+builds are incremental.
+
+### Test
+
+```
+npm test                                          # Vitest unit tests
+npm run ui:check -- --both                        # UI scenarios, both themes (Playwright, IPC mocked)
+cd src-tauri && cargo test                        # Rust unit tests
+cd src-tauri && cargo test --features integration # against a real engine (and WSL)
+```
+
+`ui:check` runs `tools/ui-check/scenarios` against the Vite dev server with
+the Tauri IPC mocked by `tools/ui-check/mock-ipc.js`, saving screenshots to
+`tools/ui-check/out/`; it fails on console errors or commands with no mock.
+It needs Chromium once: `npx playwright install chromium`. The integration
+tests create and remove throwaway `dcc-…` containers, volumes and networks,
+and use `python:3.12-slim` when it's already on the engine.
+
+### Release
+
+1. Raise `version` in `package.json`, `src-tauri/Cargo.toml` and
+   `src-tauri/tauri.conf.json`; `npm run version:check` confirms they match.
+2. Run `cargo audit` in `src-tauri`, and update `CHANGELOG.md`.
+3. Push a tag: `git tag v0.1.0 && git push origin v0.1.0`. The **Release**
+   workflow checks the tag matches, runs the tests, and builds the Windows
+   installers (macOS and Linux on a best-effort basis) into a draft release.
+4. Check the draft on GitHub and publish it.
+
+To build locally instead: `npm run tauri build` (outputs under
+`src-tauri\target\release\bundle\`; `-- --bundles nsis` for just the setup
+program).
+
+## Licence
+
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
+your option.

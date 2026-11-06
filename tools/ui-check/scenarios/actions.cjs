@@ -23,7 +23,8 @@ module.exports = async (page, { shot }) => {
   await shot("delete-dialog");
   await page.click(".dialog .btn.danger");
   await page.waitForSelector(".status-bar:has-text('Deleted 2 containers')");
-  if (await page.$(".fl-row:has-text('shop-api-1')")) throw new Error("shop-api-1 should be gone");
+  // The list reloads when the engine reports the change.
+  await page.waitForSelector(".fl-row:has-text('shop-api-1')", { state: "detached" });
 
   // Environment masks secrets.
   await page.keyboard.press("Control+l");

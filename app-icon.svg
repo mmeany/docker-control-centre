@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Docker Control Centre: an Explorer folder holding a container. -->
+  <defs>
+    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9b744"/>
+      <stop offset="1" stop-color="#d49a1f"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd970"/>
+      <stop offset="1" stop-color="#f4bd3d"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7cc4ff"/>
+      <stop offset="1" stop-color="#4a9be6"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f7fd0"/>
+      <stop offset="1" stop-color="#1f62aa"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c5ea5"/>
+      <stop offset="1" stop-color="#14467f"/>
+    </linearGradient>
+  </defs>
+  <!-- Folder back with tab -->
+  <path d="M96 232 Q96 184 144 184 H392 Q420 184 440 204 L492 256 H880 Q928 256 928 304 V808 Q928 856 880 856 H144 Q96 856 96 808 Z" fill="url(#back)"/>
+  <!-- Container cube, rising out of the folder -->
+  <g transform="translate(512 400)">
+    <path d="M0 -250 L230 -128 L0 -6 L-230 -128 Z" fill="url(#top)"/>
+    <path d="M-230 -128 L0 -6 V250 L-230 128 Z" fill="url(#left)"/>
+    <path d="M230 -128 L0 -6 V250 L230 128 Z" fill="url(#right)"/>
+    <!-- Ribs on the sides -->
+    <g stroke="#ffffff" stroke-opacity="0.35" stroke-width="14" stroke-linecap="round">
+      <path d="M-172 -70 V140"/>
+      <path d="M-115 -40 V170"/>
+      <path d="M-58 -10 V200"/>
+      <path d="M58 -10 V200"/>
+      <path d="M115 -40 V170"/>
+      <path d="M172 -70 V140"/>
+    </g>
+    <path d="M0 -250 L230 -128 L0 -6 L-230 -128 Z" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="10" stroke-linejoin="round"/>
+  </g>
+  <!-- Folder front, in front of the cube's base -->
+  <path d="M96 600 Q96 568 128 568 H896 Q928 568 928 600 V808 Q928 856 880 856 H144 Q96 856 96 808 Z" fill="url(#front)"/>
+  <path d="M96 600 Q96 568 128 568 H896 Q928 568 928 600" fill="none" stroke="#fff3c4" stroke-width="10"/>
+  <!-- Running light -->
+  <circle cx="800" cy="760" r="56" fill="#2da44e" stroke="#ffffff" stroke-width="16"/>
+</svg>

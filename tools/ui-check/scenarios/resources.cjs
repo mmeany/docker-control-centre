@@ -36,7 +36,8 @@ module.exports = async (page, { shot }) => {
 
   // Networks: built-ins can't be deleted; detail links to containers.
   await page.click(".tree-row:has-text('Networks') >> nth=0");
-  await page.click(".fl-row:has-text('bridge')");
+  // "bridge" is also every other network's driver: pick Docker's own row.
+  await page.click(".fl-row:has-text('bridge (Docker')");
   if (!(await page.$(".cmd-btn:has-text('Delete'):disabled"))) throw new Error("Delete should be off for bridge");
   await page.dblclick(".fl-row:has-text('shop_default')");
   await page.waitForSelector(".data-table:has-text('shop-api-1')");
