@@ -155,13 +155,90 @@ export function HomeIcon({ size = 16 }: P) {
   );
 }
 
-/** Icon for the sample "Local files" section (a drive). */
+/** A drive. */
 export function DriveIcon({ size = 16 }: P) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
       <rect x="1.5" y="5" width="13" height="7" rx="1.2" fill="#e4e9ee" stroke="#6b7785" strokeWidth="0.9" />
       <path d="M1.8 9.5 H14.2" stroke="#6b7785" strokeWidth="0.7" />
       <circle cx="12" cy="10.8" r="0.7" fill="#3fb950" />
+    </svg>
+  );
+}
+
+/** A container; `state` colours the corner dot (running, paused, exited, …). */
+export function ContainerIcon({ size = 16, state }: P & { state?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M2 4.5 L8 2 L14 4.5 V11.5 L8 14 L2 11.5 Z" fill="#dbe8f5" stroke="#3d6e9e" strokeWidth="0.9" strokeLinejoin="round" />
+      <path d="M2 4.5 L8 7 L14 4.5 M8 7 V14" fill="none" stroke="#3d6e9e" strokeWidth="0.8" />
+      {state !== undefined && <circle className={`state-dot state-${state || "unknown"}`} cx="12.5" cy="12.5" r="2.6" strokeWidth="0.8" />}
+    </svg>
+  );
+}
+
+/** A compose project: a stack of containers. */
+export function ProjectIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="4.5" y="1.5" width="10" height="7" rx="1" fill="#c4d8ec" stroke="#3d6e9e" strokeWidth="0.8" />
+      <rect x="2.5" y="4" width="10" height="7" rx="1" fill="#d6e5f3" stroke="#3d6e9e" strokeWidth="0.8" />
+      <rect x="0.8" y="6.8" width="10" height="7.5" rx="1" fill="#e8f1fa" stroke="#3d6e9e" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+export function LogsIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="2" y="1.5" width="12" height="13" rx="1" fill="#fff" stroke="#7a8794" strokeWidth="0.8" />
+      <path d="M4.5 4.5 H11.5 M4.5 7 H10 M4.5 9.5 H11.5 M4.5 12 H8.5" stroke="#5b7da8" strokeWidth="0.9" />
+    </svg>
+  );
+}
+
+export function TerminalIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="#2b2f36" stroke="#56636f" strokeWidth="0.8" />
+      <path d="M4 6 L6.5 8 L4 10 M7.5 10.5 H11" fill="none" stroke="#e4e4e4" strokeWidth="1" />
+    </svg>
+  );
+}
+
+export function StatsIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M1.5 14.5 H14.5" stroke="#7a8794" strokeWidth="0.9" />
+      <rect x="2.5" y="8" width="2.5" height="6" fill="#7fb2e5" />
+      <rect x="6.75" y="4" width="2.5" height="10" fill="#3d82c4" />
+      <rect x="11" y="10" width="2.5" height="4" fill="#7fb2e5" />
+    </svg>
+  );
+}
+
+/** Key / value data (environment, labels, ports, …). */
+export function PropertiesIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.5" y="2" width="13" height="12" rx="1" fill="#fff" stroke="#7a8794" strokeWidth="0.8" />
+      <path d="M1.5 6 H14.5 M1.5 10 H14.5 M6 2 V14" stroke="#b5bfca" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ size = 12 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden>
+      <path d="M6 1.5 V10.5 M1.5 6 H10.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+export function CloseIcon({ size = 10 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 10 10" aria-hidden>
+      <path d="M1.5 1.5 L8.5 8.5 M8.5 1.5 L1.5 8.5" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }

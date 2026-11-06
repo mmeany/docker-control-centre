@@ -2,8 +2,8 @@
 //! Add a section's commands to `generate_handler!` below.
 
 mod commands;
+mod engine;
 mod error;
-mod files; // sample
 mod settings;
 mod util;
 
@@ -19,6 +19,8 @@ pub fn run() {
             let dir = app.path().app_config_dir()?;
             app.manage(AppState {
                 settings: SettingsStore::new(dir),
+                engine: engine::Engine::from_env(),
+                watcher: Default::default(),
             });
             Ok(())
         })
@@ -31,11 +33,9 @@ pub fn run() {
             commands::pick_folder,
             commands::pick_open_file,
             commands::pick_save_file,
-            // sample:start
-            commands::files::home_dir,
-            commands::files::list_dir,
-            commands::files::read_text,
-            // sample:end
+            commands::engine::engine_info,
+            commands::engine::list_containers,
+            commands::engine::watch_engine,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the app");

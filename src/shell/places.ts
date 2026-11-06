@@ -37,8 +37,26 @@ export function parentPlace(p: Place): Place | null {
   return up === null || up === undefined ? rootOf(s) : { section: s.id, path: up };
 }
 
-/** Copyable address for the place ("" if none). */
+/** Copyable address for the place: "/" for Home, "/<section>/<path>" below. */
 export function placeUri(p: Place): string {
   const s = sectionOf(p);
-  return s ? (s.uri?.(p.path) ?? p.path) : "";
+  if (!s) return "/";
+  return s.uri?.(p.path) ?? `/${s.id}${p.path ? `/${p.path}` : ""}`;
+}
+
+/**
+ * A typed address back to a place: "/containers/@shop/web-1" (leading slash
+ * optional; the section may be its id or its name, any case). null if it
+ * doesn't lead anywhere.
+ */
+export function parseAddress(text: string): Place | null {
+  const t = text.trim().replace(/\\/g, "/");
+  const segs = t.split("/").filter((x) => x !== "");
+  if (segs.length === 0) return HOME;
+  const head = segs[0].toLowerCase();
+  const s = SECTIONS.find((x) => x.id.toLowerCase() === head || x.name.toLowerCase() === head);
+  if (!s) return null;
+  const path = segs.slice(1).join("/");
+  if (path === "") return rootOf(s);
+  return (s.isPath?.(path) ?? true) ? { section: s.id, path } : null;
 }

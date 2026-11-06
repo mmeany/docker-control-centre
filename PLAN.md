@@ -22,6 +22,27 @@ A Windows-first Tauri v2 desktop app for managing a Docker engine, using the Win
 | Testing | Rust unit tests behind a `DockerApi` trait (mockall); engine integration tests behind a `integration` feature; Vitest + Testing Library |
 | Distribution | Public GitHub repo, GitHub Actions builds unsigned MSI/NSIS for each release, licensed MIT OR Apache-2.0 |
 
+## Adjusted to the template (M1)
+
+Where the template's conventions differ from the first draft of this plan,
+the template wins (CLAUDE.md is the source of truth for code):
+
+- **No extra frontend libraries.** No Zustand, TanStack Query/Virtual or
+  `ts-rs`. Tabs and history are plain React state (`state/tabs.ts`), engine
+  data is loaded per section and reloaded from the change feed, `FileList` is
+  already virtualised, and DTO types are written by hand in `src/api/`.
+- **Settings** use the template's `settings.json` store (`values`), not
+  `tauri-plugin-store` / `tauri-plugin-window-state`.
+- **Tabs live in the first toolbar row**, under the native title bar, rather
+  than in a custom title bar (which avoids the Snap layouts risk).
+- **Testing:** instead of a mockable `DockerApi` trait, mapping from bollard
+  models is pure functions with unit tests, plus `--features integration`
+  tests against the real engine. Vitest covers the path, address and tab
+  logic, and `npm run ui:check` drives the UI with the IPC mocked.
+- **Container paths** are `@project/name/child`, e.g.
+  `/containers/@shop/shop-web-1/logs`; standalone containers have no
+  `@project` segment. The sections below are the original draft.
+
 ## Location model (the backbone)
 
 Every view is a `Location`, serialised as a path and rendered by the address bar as breadcrumbs.

@@ -1,8 +1,27 @@
 # Docker Control Centre
 
-A desktop app built with Tauri 2, React and Rust.
+A Windows-first desktop app for managing a Docker engine the way File
+Explorer manages files: tabs, a tree, an address bar you can type into, and
+compose projects and containers as folders. Built with Tauri 2, React and Rust.
 
-See `CLAUDE.md` for the architecture, the rules, and how to add a section.
+See `CLAUDE.md` for the architecture, the rules, and how to add a section, and
+`PLAN.md` for the roadmap.
+
+## Connecting to Docker
+
+The app uses `DOCKER_HOST` when it's set (`tcp://`, `npipe://` or `unix://`),
+and `tcp://localhost:2375` otherwise. That default suits Docker Engine running
+in WSL with its API published on localhost.
+
+**Security:** port 2375 is the Docker API with no authentication. Anyone who
+can reach it controls the engine and, through it, the machine. Only bind it to
+`localhost`, never to `0.0.0.0` on a network you don't trust.
+
+## Sections
+
+- **Containers:** compose projects and standalone containers. Open a container
+  for its logs, terminal, stats, files and settings (being built, see
+  `PLAN.md`). Lists update live from the engine's events.
 
 ## Prerequisites (developer machine only)
 
@@ -64,3 +83,7 @@ To build only the setup program: `npm run tauri build -- --bundles nsis`.
 | Alt+← / Alt+→ | Back / forward |
 | F5 | Refresh |
 | Ctrl+A | Select all |
+| Ctrl+T / Ctrl+W | New tab / close tab |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
+| Ctrl+L, Alt+D | Type an address (e.g. `/containers/@shop/shop-web-1`) |
+| Middle-click a tab | Close it |

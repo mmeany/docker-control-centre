@@ -1,28 +1,37 @@
 // Runs in the page before the app loads: a fake window.__TAURI_INTERNALS__ so
 // invoke() calls reach the handlers below instead of Rust. Add a handler for
 // every command your screens call (an unhandled one fails the check).
-// Scenarios can override or add handlers at runtime: window.__mock[cmd] = fn.
+// Scenarios can override or add handlers at runtime: window.__mock[cmd] = fn,
+// and push engine messages with window.__engine(message).
 (() => {
-  const SEP = "/";
-  const HOME = "/home/demo";
-  // A small fake file system: folder path -> entries.
   const now = Date.now();
-  const iso = (daysAgo) => new Date(now - daysAgo * 86400000).toISOString().replace(/\.\d+Z$/, "Z");
-  const file = (dir, name, size, daysAgo, hidden = false) => ({ name, path: dir + SEP + name, isDir: false, size, modified: iso(daysAgo), hidden });
-  const folder = (dir, name, daysAgo, hidden = false) => ({ name, path: dir + SEP + name, isDir: true, size: 0, modified: iso(daysAgo), hidden });
-  const fs = {
-    [HOME]: [folder(HOME, "Documents", 2), folder(HOME, "Projects", 1), folder(HOME, ".config", 30, true), file(HOME, "notes.txt", 1834, 3), file(HOME, ".profile", 220, 90, true)],
-    [HOME + "/Documents"]: [file(HOME + "/Documents", "report.json", 4210, 5), file(HOME + "/Documents", "budget.csv", 18342, 8), file(HOME + "/Documents", "photo.png", 2048000, 40)],
-    [HOME + "/Projects"]: [folder(HOME + "/Projects", "website", 1), file(HOME + "/Projects", "README.md", 912, 1)],
-    [HOME + "/Projects/website"]: [file(HOME + "/Projects/website", "index.html", 1200, 1)],
-  };
-  for (let i = 0; i < 60; i++) fs[HOME + "/Documents"].push(file(HOME + "/Documents", `log-${String(i).padStart(3, "0")}.txt`, 1000 + i * 37, i % 20));
-  const texts = {
-    [HOME + "/notes.txt"]: "Things to try:\n- the filter box\n- Show hidden\n- Back / Forward / Up\n",
-    [HOME + "/Documents/report.json"]: JSON.stringify({ title: "Quarterly report", quarter: "Q3", totals: { revenue: 125000, costs: 98000 }, regions: ["north", "south"], approved: true }),
-  };
+  const iso = (hoursAgo) => new Date(now - hoursAgo * 3600000).toISOString().replace(/\.\d+Z$/, "Z");
+  let n = 0;
+  const container = (name, image, state, status, opts = {}) => ({
+    id: (++n).toString(16).padStart(4, "0").repeat(16),
+    name,
+    image,
+    state,
+    status,
+    created: iso(opts.age ?? 30),
+    ports: opts.ports ?? [],
+    project: opts.project ?? null,
+    service: opts.service ?? null,
+    workingDir: opts.project ? `/mnt/e/projects/${opts.project}` : null,
+  });
+  const containers = [
+    container("shop-web-1", "nginx:1.27", "running", "Up 3 hours", { project: "shop", service: "web", ports: ["8080→80/tcp"] }),
+    container("shop-api-1", "shop-api:latest", "running", "Up 3 hours", { project: "shop", service: "api", ports: ["3000→3000/tcp"] }),
+    container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker" }),
+    container("monitoring-prometheus-1", "prom/prometheus:v3.1.0", "running", "Up 2 days", { project: "monitoring", service: "prometheus", ports: ["9090→9090/tcp"], age: 60 }),
+    container("monitoring-grafana-1", "grafana/grafana:11.4.0", "paused", "Up 2 days (Paused)", { project: "monitoring", service: "grafana", ports: ["3001→3000/tcp"], age: 60 }),
+    container("postgres", "postgres:17", "running", "Up 5 days", { ports: ["5432→5432/tcp"], age: 130 }),
+    container("redis-scratch", "redis:7.4", "exited", "Exited (137) 3 days ago", { age: 80 }),
+  ];
 
   const settings = { theme: window.__UI_CHECK_THEME__ || "dark", filterHistory: {}, values: {} };
+  let engineChannel = null;
+  let engineIndex = 0;
   const handlers = {
     get_settings: () => settings,
     set_theme: (a) => ((settings.theme = a.theme), settings),
@@ -32,19 +41,25 @@
     },
     forget_filter: (a) => (settings.filterHistory[a.key] = a.value === null ? [] : (settings.filterHistory[a.key] || []).filter((v) => v !== a.value)),
     set_value: (a) => (a.value === null ? delete settings.values[a.key] : (settings.values[a.key] = a.value), settings),
-    pick_folder: () => HOME + "/Projects",
+    pick_folder: () => null,
     pick_open_file: () => null,
     pick_save_file: () => null,
-    home_dir: () => HOME,
-    list_dir: (a) => {
-      if (!fs[a.path]) throw { kind: "notFound", message: `${a.path} doesn't exist.`, detail: "" };
-      return fs[a.path];
-    },
-    read_text: (a) => {
-      const entry = Object.values(fs).flat().find((e) => e.path === a.path);
-      if (a.path.endsWith(".png")) return { text: "", size: entry?.size ?? 0, truncated: false, binary: true };
-      const text = texts[a.path] ?? `Contents of ${a.path}\n`;
-      return { text, size: entry?.size ?? text.length, truncated: false, binary: false };
+    engine_info: () => ({
+      name: "ubuntu-dev",
+      endpoint: "tcp://localhost:2375",
+      serverVersion: "28.5.1",
+      operatingSystem: "Ubuntu 24.04.3 LTS",
+      containers: containers.length,
+      running: containers.filter((c) => c.state === "running").length,
+      images: 31,
+    }),
+    // Copies, like real IPC: the app must not see the scenario's edits in place.
+    list_containers: () => JSON.parse(JSON.stringify(containers)),
+    watch_engine: (a) => {
+      engineChannel = a.onMessage;
+      engineIndex = 0;
+      setTimeout(() => window.__engine({ type: "connected" }), 20);
+      return null;
     },
   };
 
@@ -52,6 +67,9 @@
   window.__calls = [];
   const callbacks = {};
   let nextId = 1;
+  /** Delivers a message on the engine channel, as Rust would. */
+  window.__engine = (message) => engineChannel && callbacks[engineChannel.id]?.({ index: engineIndex++, message });
+  window.__containers = containers;
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main", windowLabel: "main" } },
     transformCallback: (fn) => {

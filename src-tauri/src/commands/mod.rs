@@ -1,7 +1,7 @@
 //! Tauri commands: the only surface the UI can call. Kept thin; logic lives in
 //! modules. App-level commands are here; each section has its own submodule.
 
-pub mod files; // sample
+pub mod engine;
 
 use crate::error::AppError;
 use crate::settings::{Settings, SettingsStore, ThemePref};
@@ -11,6 +11,9 @@ use tokio::sync::oneshot;
 
 pub struct AppState {
     pub settings: SettingsStore,
+    pub engine: crate::engine::Engine,
+    /// The running change feed (see `engine::watch_engine`).
+    pub watcher: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
 #[tauri::command]

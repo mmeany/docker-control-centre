@@ -1,12 +1,17 @@
 import type { ReactNode } from "react";
 import type { ConfirmButton } from "../components/ConfirmDialog";
 import type { MenuItem } from "../components/ContextMenu";
+import type { EngineState } from "../state/engine";
 import type { Place } from "./places";
 
 /** What the app shell provides to every section. */
 export interface Shell {
   place: Place;
   navigate: (p: Place) => void;
+  /** Opens a place in a new tab (and switches to it). */
+  openInNewTab: (p: Place) => void;
+  /** Connection, engine info and change counters. */
+  engine: EngineState;
   /** Modal question; resolves with the chosen button's value. */
   ask: (title: string, body: ReactNode, buttons: ConfirmButton<string>[], cancelValue: string) => Promise<string>;
   /** Single-line text prompt; resolves with the value or null if cancelled. */

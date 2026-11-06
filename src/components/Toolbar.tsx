@@ -1,20 +1,34 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
 import { HOME, placeCrumbs, type Place } from "../shell/places";
-import { BackIcon, CopyIcon, ForwardIcon, RefreshIcon, UpIcon } from "./Icons";
+import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
+
+export interface TabInfo {
+  id: number;
+  title: string;
+  icon: ReactNode;
+}
 
 interface Props {
-  title: string;
+  tabs: TabInfo[];
+  activeTab: number;
+  onSelectTab: (id: number) => void;
+  onCloseTab: (id: number) => void;
+  onNewTab: () => void;
   busy: boolean;
   theme: ThemePref;
   place: Place;
+  /** Label for Home in the address bar (the engine's name). */
+  homeLabel: string;
   canBack: boolean;
   canForward: boolean;
   canUp: boolean;
   /** Command-bar buttons from the active section. */
   commands: ReactNode;
-  /** Copyable address of the current place ("" disables the button). */
+  /** Copyable address of the current place. */
   uri: string;
+  /** Bumped to put the address bar into edit mode (Ctrl+L, Alt+D). */
+  editToken: number;
   onThemeChange: (theme: ThemePref) => void;
   onRefresh: () => void;
   onCopyLocation: () => void;
@@ -22,14 +36,44 @@ interface Props {
   onForward: () => void;
   onUp: () => void;
   onNavigate: (p: Place) => void;
+  /** A typed address; returns false if it leads nowhere (the bar stays open). */
+  onSubmitAddress: (text: string) => boolean;
 }
 
-/** Three rows: app row (title, theme), command bar, navigation + address bar. */
+/** Three rows: tabs (+ theme), command bar, navigation + address bar. */
 export function Toolbar(p: Props) {
   return (
     <div className="toolbar">
-      <div className="toolbar-row">
-        <span className="app-title">{p.title}</span>
+      <div className="toolbar-row tab-row">
+        <div className="tab-strip" role="tablist">
+          {p.tabs.map((t) => (
+            <div
+              key={t.id}
+              role="tab"
+              aria-selected={t.id === p.activeTab}
+              className={`tab ${t.id === p.activeTab ? "active" : ""}`}
+              title={t.title}
+              onClick={() => p.onSelectTab(t.id)}
+              onAuxClick={(e) => e.button === 1 && p.onCloseTab(t.id)}
+            >
+              {t.icon}
+              <span className="tab-title">{t.title}</span>
+              <button
+                className="tab-close"
+                title="Close tab (Ctrl+W)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  p.onCloseTab(t.id);
+                }}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+          ))}
+          <button className="tool-btn tab-new" title="New tab (Ctrl+T)" onClick={p.onNewTab}>
+            <PlusIcon />
+          </button>
+        </div>
         <div className="spacer" />
         {p.busy && <span className="busy">Working…</span>}
         <label className="field-label" htmlFor="theme">
@@ -60,13 +104,15 @@ export function Toolbar(p: Props) {
         <button className="tool-btn" title="Up one level (Backspace)" onClick={p.onUp} disabled={!p.canUp}>
           <UpIcon />
         </button>
-        <AddressBar place={p.place} onNavigate={p.onNavigate} />
-        <button
-          className="tool-btn"
-          title={p.uri ? `Copy ${p.uri} to the clipboard` : "Copy this location to the clipboard"}
-          onClick={p.onCopyLocation}
-          disabled={!p.uri}
-        >
+        <AddressBar
+          place={p.place}
+          homeLabel={p.homeLabel}
+          uri={p.uri}
+          editToken={p.editToken}
+          onNavigate={p.onNavigate}
+          onSubmit={p.onSubmitAddress}
+        />
+        <button className="tool-btn" title={`Copy ${p.uri} to the clipboard`} onClick={p.onCopyLocation}>
           <CopyIcon />
         </button>
         <button className="tool-btn" title="Refresh (F5)" onClick={p.onRefresh}>
@@ -77,12 +123,78 @@ export function Toolbar(p: Props) {
   );
 }
 
-function AddressBar({ place, onNavigate }: { place: Place; onNavigate: (p: Place) => void }) {
+interface AddressProps {
+  place: Place;
+  homeLabel: string;
+  uri: string;
+  editToken: number;
+  onNavigate: (p: Place) => void;
+  onSubmit: (text: string) => boolean;
+}
+
+/** Breadcrumbs; click the empty part (or Ctrl+L) to type an address. */
+function AddressBar({ place, homeLabel, uri, editToken, onNavigate, onSubmit }: AddressProps) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const [bad, setBad] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    setText(uri);
+    setBad(false);
+    setEditing(true);
+  }
+
+  useEffect(() => {
+    if (editToken > 0) startEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editToken]);
+
+  useEffect(() => {
+    if (editing) input.current?.select();
+  }, [editing]);
+
+  // Navigating elsewhere ends editing.
+  useEffect(() => setEditing(false), [place]);
+
+  if (editing) {
+    return (
+      <input
+        ref={input}
+        className={`address-bar address-input ${bad ? "bad" : ""}`}
+        aria-label="Address"
+        title={bad ? "There's nothing at that address" : "Type an address, e.g. /containers/@shop/web-1"}
+        value={text}
+        spellCheck={false}
+        onChange={(e) => {
+          setText(e.target.value);
+          setBad(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            if (onSubmit(text)) setEditing(false);
+            else setBad(true);
+          } else if (e.key === "Escape") {
+            setEditing(false);
+          }
+        }}
+        onBlur={() => setEditing(false)}
+      />
+    );
+  }
+
   const crumbs = placeCrumbs(place);
   return (
-    <div className="address-bar" role="navigation" aria-label="Address">
+    <div
+      className="address-bar"
+      role="navigation"
+      aria-label="Address"
+      onClick={(e) => {
+        if (!(e.target as HTMLElement).closest(".crumb")) startEdit();
+      }}
+    >
       <button className="crumb" onClick={() => onNavigate(HOME)}>
-        Home
+        {homeLabel}
       </button>
       {crumbs.map((c, i) => (
         <span key={i} className="crumb-wrap">

@@ -3,10 +3,10 @@
 // SectionUi) and add an entry here. The shell calls every section's hook on
 // each render, in this order, so the list must not change at runtime.
 import type { ReactNode } from "react";
-import { createElement } from "react"; // sample
-import { DriveIcon } from "../components/Icons"; // sample
+import { createElement } from "react";
+import { ContainerIcon } from "../components/Icons";
 import type { SectionUi, Shell } from "../shell/shell";
-import { filesCrumbs, filesParent, useFilesSection } from "./files/useFilesSection"; // sample
+import { containersCrumbs, containersParent, isContainersPath, useContainersSection } from "./containers/useContainersSection";
 
 export interface SectionDef {
   id: string;
@@ -19,23 +19,24 @@ export interface SectionDef {
   crumbs?: (path: string) => { label: string; path: string }[];
   /** Path one level up; null / undefined = the section root. */
   parent?: (path: string) => string | null;
-  /** Copyable form of a path (defaults to the path). */
+  /** Copyable form of a path (defaults to "/<id>/<path>"). */
   uri?: (path: string) => string;
+  /** Whether a typed address (below the section) is a path here; default: any. */
+  isPath?: (path: string) => boolean;
   /** Controller hook. */
   use: (shell: Shell) => SectionUi;
 }
 
 export const SECTIONS: SectionDef[] = [
-  // sample:start
   {
-    id: "files",
-    name: "Local files",
-    description: "Sample section: browse a folder on this computer and preview text files",
-    icon: createElement(DriveIcon),
+    id: "containers",
+    name: "Containers",
+    description: "Compose projects and containers: open one for its logs, terminal, stats and files",
+    icon: createElement(ContainerIcon),
     root: "",
-    crumbs: filesCrumbs,
-    parent: filesParent,
-    use: useFilesSection,
+    crumbs: containersCrumbs,
+    parent: containersParent,
+    isPath: isContainersPath,
+    use: useContainersSection,
   },
-  // sample:end
 ];

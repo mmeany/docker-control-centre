@@ -8,16 +8,17 @@ import type { AppError, Settings, ThemePref } from "./api/core";
 import { ConfirmDialog, type ConfirmButton } from "./components/ConfirmDialog";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { FileList, type Column, type Row } from "./components/FileList";
-import { HomeIcon } from "./components/Icons";
+import { ServerIcon } from "./components/Icons";
 import { PromptDialog } from "./components/PromptDialog";
 import { StatusBar } from "./components/StatusBar";
-import { Toolbar } from "./components/Toolbar";
+import { Toolbar, type TabInfo } from "./components/Toolbar";
 import { TreeRow } from "./components/TreeRow";
 import { TypedConfirmDialog } from "./components/TypedConfirmDialog";
 import { SECTIONS } from "./sections";
-import { HOME, parentPlace, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
+import { HOME, parentPlace, parseAddress, placeCrumbs, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
 import type { SectionUi, Shell } from "./shell/shell";
-import { useHistory } from "./state/history";
+import { useEngine } from "./state/engine";
+import { useTabs } from "./state/tabs";
 import { useTheme } from "./state/theme";
 
 /** Shown in the toolbar; the window title comes from tauri.conf.json. */
@@ -75,8 +76,11 @@ export default function App() {
   const [flash, setFlash] = useState<string | null>(null);
   const [homeSelected, setHomeSelected] = useState<Set<string>>(new Set());
   const flashTimer = useRef<number | undefined>(undefined);
-  const nav = useHistory<Place>(HOME, samePlace);
+  const [editAddress, setEditAddress] = useState(0);
+  const nav = useTabs<Place>(HOME, samePlace);
   const place = nav.current;
+  const engine = useEngine();
+  const homeLabel = engine.info?.name ?? "Docker";
   const treeRef = useRef<HTMLDivElement>(null);
 
   const themePref: ThemePref = settings?.theme ?? "system";
@@ -144,6 +148,8 @@ export default function App() {
   const shell: Shell = {
     place,
     navigate: nav.navigate,
+    openInNewTab: (p) => nav.openTab(p),
+    engine,
     ask,
     askName,
     confirmTyped,
@@ -175,11 +181,32 @@ export default function App() {
     if (p) nav.navigate(p);
   }, [nav, place]);
 
-  // Explorer keyboard shortcuts (ignored while typing in inputs or dialogs).
+  // Explorer keyboard shortcuts. Tab and address shortcuts work anywhere but in
+  // dialogs; the rest are ignored while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select, [role=dialog], [role=alertdialog]")) return;
+      if (t.closest("[role=dialog], [role=alertdialog]")) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      if (ctrl && k === "t") {
+        e.preventDefault();
+        nav.openTab(place);
+        return;
+      } else if (ctrl && (k === "w" || k === "f4")) {
+        e.preventDefault();
+        nav.closeActive();
+        return;
+      } else if (ctrl && e.key === "Tab") {
+        e.preventDefault();
+        nav.cycleTab(e.shiftKey ? -1 : 1);
+        return;
+      } else if ((ctrl && k === "l") || (e.altKey && k === "d")) {
+        e.preventDefault();
+        setEditAddress((n) => n + 1);
+        return;
+      }
+      if (t.closest("input, textarea, select")) return;
       if (e.key === "Backspace" || (e.altKey && e.key === "ArrowUp")) {
         e.preventDefault();
         goUp();
@@ -196,7 +223,7 @@ export default function App() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goUp, nav, refresh]);
+  }, [goUp, nav, refresh, place]);
 
   // Keep the selected tree node in view.
   useEffect(() => {
@@ -252,13 +279,45 @@ export default function App() {
   );
 
   let statusLeft = active ? active.status : `${SECTIONS.length} section${SECTIONS.length === 1 ? "" : "s"}`;
+  if (!active && engine.info) {
+    const i = engine.info;
+    statusLeft += ` · Docker ${i.serverVersion} on ${i.operatingSystem} · ${i.containers.toLocaleString()} containers (${i.running.toLocaleString()} running) · ${i.images.toLocaleString()} images`;
+  }
   if (working) statusLeft = working;
   else if (flash) statusLeft = flash;
+
+  const tabInfos: TabInfo[] = nav.tabs.map((t) => {
+    const p = t.stack[t.index];
+    const crumbs = placeCrumbs(p);
+    return { id: t.id, title: crumbs.length ? crumbs[crumbs.length - 1].label : homeLabel, icon: sectionOf(p)?.icon ?? <ServerIcon /> };
+  });
+
+  function submitAddress(text: string): boolean {
+    const p = parseAddress(text);
+    if (p) nav.navigate(p);
+    return p !== null;
+  }
+
+  const endpoint = engine.info?.endpoint ?? "";
+  const connection = (
+    <>
+      <span className={`conn-dot ${engine.status}`} />
+      {engine.status === "connected" ? `${homeLabel} · ${endpoint}` : engine.status === "connecting" ? "Connecting…" : "Not connected"}
+    </>
+  );
+  const connectionTitle = engine.status === "connected" ? `Connected to ${endpoint}` : engine.message;
 
   return (
     <div className="app">
       <Toolbar
-        title={APP_TITLE}
+        tabs={tabInfos}
+        activeTab={nav.active}
+        onSelectTab={nav.selectTab}
+        onCloseTab={nav.closeTab}
+        onNewTab={() => nav.openTab(place)}
+        homeLabel={homeLabel}
+        editToken={editAddress}
+        onSubmitAddress={submitAddress}
         busy={working !== null || (active?.busy ?? false)}
         theme={themePref}
         onThemeChange={(t) => void changeTheme(t)}
@@ -278,7 +337,7 @@ export default function App() {
       <div className="panes">
         <div className="pane-tree" style={{ width: treeWidth }} ref={treeRef}>
           <div className="tree" role="tree">
-            <TreeRow depth={0} label="Home" icon={<HomeIcon />} selected={place.section === null} expanded onClick={() => nav.navigate(HOME)}>
+            <TreeRow depth={0} label={homeLabel} icon={<ServerIcon />} title={engine.info?.endpoint} selected={place.section === null} expanded onClick={() => nav.navigate(HOME)}>
               {SECTIONS.map((s) => (
                 <div key={s.id}>{sectionUis[s.id].tree}</div>
               ))}
@@ -288,7 +347,7 @@ export default function App() {
         <div className="splitter" onMouseDown={startResize} />
         <div className="pane-main">{content}</div>
       </div>
-      <StatusBar left={statusLeft} right={APP_TITLE} />
+      <StatusBar left={statusLeft} right={connection} rightTitle={connectionTitle} />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       {SECTIONS.map((s) => (
         <div key={s.id} style={{ display: "contents" }}>

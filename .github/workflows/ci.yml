@@ -22,6 +22,7 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm run build
+      - run: npm test
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
