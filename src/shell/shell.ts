@@ -11,6 +11,8 @@ export interface Shell {
   navigate: (p: Place) => void;
   /** Opens a place in a new tab (and switches to it). */
   openInNewTab: (p: Place) => void;
+  /** Opens a place in its own window; absent inside a pop-out window. */
+  popOut?: (p: Place) => void;
   /** Connection, engine info and change counters. */
   engine: EngineState;
   /** View chosen for this place (pass to FileList). */

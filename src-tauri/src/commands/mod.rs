@@ -2,6 +2,8 @@
 //! modules. App-level commands are here; each section has its own submodule.
 
 pub mod engine;
+pub mod streams;
+pub mod window;
 
 use crate::error::AppError;
 use crate::settings::{Settings, SettingsStore, ThemePref};
@@ -12,8 +14,13 @@ use tokio::sync::oneshot;
 pub struct AppState {
     pub settings: SettingsStore,
     pub engine: crate::engine::Engine,
-    /// The running change feed (see `engine::watch_engine`).
-    pub watcher: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    /// Each window's change feed, by window label (see `engine::watch_engine`).
+    pub watchers:
+        std::sync::Mutex<std::collections::HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
+    /// Logs, stats and terminal output tasks.
+    pub streams: crate::streams::StreamRegistry,
+    /// Open terminals by session id.
+    pub terminals: tokio::sync::Mutex<std::collections::HashMap<u64, streams::Terminal>>,
 }
 
 #[tauri::command]

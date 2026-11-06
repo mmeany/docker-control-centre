@@ -2,7 +2,7 @@
 // a container shows its children (logs, terminal, environment, …). Lists
 // reload when the engine reports container changes; actions run on the
 // selection (a project stands for its containers) or on the open container.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppError } from "../../api/core";
 import { engineApi, type ContainerDetails, type ContainerItem } from "../../api/engine";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
@@ -31,7 +31,15 @@ import type { Place } from "../../shell/places";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { applicable, summary, VERBS, working, type Verb } from "./actions";
 import { CHILDREN, containerPath, formatContainers, parseContainers, projectPath, type ChildId, type ContainersLoc } from "./paths";
+import { LogsView } from "./LogsView";
+import { StatsView } from "./StatsView";
 import { ContainerPane, InspectChild, INSPECT_CHILDREN, ProjectPane, SelectionPane } from "./views";
+
+/** xterm is big: load it the first time a terminal opens (its own chunk). */
+const TerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
+
+/** Children that are live views and can have their own window. */
+const LIVE_CHILDREN: ChildId[] = ["logs", "terminal", "stats"];
 
 export { containersCrumbs, containersParent, isContainersPath } from "./paths";
 
@@ -370,6 +378,10 @@ export function useContainersSection(shell: Shell): SectionUi {
           { label: "Open", bold: true, shortcut: "Enter", onClick: () => go(key) },
           { label: "Open in new tab", onClick: () => shell.openInNewTab(placeOf(key)) },
         );
+        if (l?.kind === "child" && LIVE_CHILDREN.includes(l.child) && shell.popOut) {
+          const popOut = shell.popOut;
+          menu.push({ label: "Open in new window", onClick: () => popOut(placeOf(key)) });
+        }
         if (l?.kind !== "child") menu.push("separator");
       }
       const verbs = verbItems(list);
@@ -524,7 +536,16 @@ export function useContainersSection(shell: Shell): SectionUi {
           <div className="empty-note">Loading…</div>
         );
       } else {
-        content = <div className="empty-note center">The {child.name.toLowerCase()} view isn't built yet.</div>;
+        const popOut = shell.popOut ? () => shell.popOut!(placeOf(path)) : undefined;
+        if (loc.child === "logs") content = <LogsView key={container.id} container={container} shell={shell} onPopOut={popOut} />;
+        else if (loc.child === "terminal")
+          content = (
+            <Suspense fallback={<div className="empty-note">Loading the terminal…</div>}>
+              <TerminalView key={container.id} container={container} onPopOut={popOut} />
+            </Suspense>
+          );
+        else if (loc.child === "stats") content = <StatsView key={container.id} container={container} onPopOut={popOut} />;
+        else content = <div className="empty-note center">The {child.name.toLowerCase()} view isn't built yet.</div>;
       }
     }
     if (selected.size > 1) status += ` · ${selected.size} selected`;

@@ -17,6 +17,7 @@ import { TypedConfirmDialog } from "./components/TypedConfirmDialog";
 import { SECTIONS } from "./sections";
 import { HOME, parentPlace, parseAddress, placeCrumbs, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
 import type { SectionUi, Shell } from "./shell/shell";
+import { streamsApi } from "./api/streams";
 import { useEngine } from "./state/engine";
 import { DETAILS_PANE_KEY, readSession, readViews, SESSION_KEY, VIEWS_KEY, withView, type SavedSession } from "./state/session";
 import { useTabs } from "./state/tabs";
@@ -52,6 +53,12 @@ interface TypedConfirmState {
 
 const TREE_WIDTH_KEY = "app.treeWidth";
 
+/** In a pop-out window (?popout=<address>): the one place it shows. */
+const POPOUT_PLACE: Place | null = (() => {
+  const a = new URLSearchParams(window.location.search).get("popout");
+  return a ? parseAddress(a) : null;
+})();
+
 function loadTreeWidth(): number {
   try {
     const v = Number(localStorage.getItem(TREE_WIDTH_KEY));
@@ -78,7 +85,7 @@ export default function App() {
   const [homeSelected, setHomeSelected] = useState<Set<string>>(new Set());
   const flashTimer = useRef<number | undefined>(undefined);
   const [editAddress, setEditAddress] = useState(0);
-  const nav = useTabs<Place>(HOME, samePlace);
+  const nav = useTabs<Place>(POPOUT_PLACE ?? HOME, samePlace);
   const place = nav.current;
   const engine = useEngine();
   const homeLabel = engine.info?.name ?? "Docker";
@@ -99,7 +106,8 @@ export default function App() {
       .then((s) => {
         setSettings(s);
         const session = readSession(s.values[SESSION_KEY]);
-        if (session) nav.restore(session.places, session.active);
+        // A pop-out shows its own place and doesn't touch the main window's session.
+        if (session && !POPOUT_PLACE) nav.restore(session.places, session.active);
         setViews(readViews(s.values[VIEWS_KEY]));
         setDetailsPane(s.values[DETAILS_PANE_KEY] === true);
       })
@@ -112,7 +120,7 @@ export default function App() {
   const activeIndex = nav.tabs.findIndex((t) => t.id === nav.active);
   const sessionJson = JSON.stringify({ tabs: tabUris, active: activeIndex } satisfies SavedSession);
   useEffect(() => {
-    if (!restored) return;
+    if (!restored || POPOUT_PLACE) return;
     const t = window.setTimeout(() => {
       appApi.setValue(SESSION_KEY, JSON.parse(sessionJson)).catch(() => {});
     }, 500);
@@ -191,6 +199,15 @@ export default function App() {
     place,
     navigate: nav.navigate,
     openInNewTab: (p) => nav.openTab(p),
+    popOut: POPOUT_PLACE
+      ? undefined
+      : (p) => {
+          const title = placeCrumbs(p)
+            .slice(-2)
+            .map((c) => c.label)
+            .join(" › ");
+          streamsApi.openPopout(placeUri(p), title).catch((e) => showError(e));
+        },
     engine,
     view,
     ask,
@@ -229,7 +246,8 @@ export default function App() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement;
-      if (t.closest("[role=dialog], [role=alertdialog]")) return;
+      // Dialogs, and terminals (the shell owns Ctrl+W, Ctrl+L, …), keep their keys.
+      if (t.closest("[role=dialog], [role=alertdialog], .xterm")) return;
       const ctrl = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
       if (ctrl && k === "t") {
@@ -364,6 +382,68 @@ export default function App() {
   );
   const connectionTitle = engine.status === "connected" ? `Connected to ${endpoint}` : engine.message;
 
+  const overlays = (
+    <>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {SECTIONS.map((s) => (
+        <div key={s.id} style={{ display: "contents" }}>
+          {sectionUis[s.id].dialogs}
+        </div>
+      ))}
+      {prompt && (
+        <PromptDialog
+          title={prompt.title}
+          label={prompt.label}
+          initial={prompt.initial}
+          okLabel={prompt.okLabel}
+          validate={prompt.validate}
+          onResult={(v) => {
+            setPrompt(null);
+            prompt.resolve(v);
+          }}
+        />
+      )}
+      {typedConfirm && (
+        <TypedConfirmDialog
+          title={typedConfirm.title}
+          confirmText={typedConfirm.confirmText}
+          actionLabel={typedConfirm.actionLabel}
+          onResult={(ok) => {
+            setTypedConfirm(null);
+            typedConfirm.resolve(ok);
+          }}
+        >
+          {typedConfirm.body}
+        </TypedConfirmDialog>
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          buttons={confirm.buttons}
+          cancelValue={confirm.cancelValue}
+          onResult={(v) => {
+            setConfirm(null);
+            confirm.resolve(v);
+          }}
+        >
+          {confirm.body}
+        </ConfirmDialog>
+      )}
+    </>
+  );
+
+  if (POPOUT_PLACE) {
+    return (
+      <div className="app popout">
+        <div className="panes">
+          <div className="pane-main">{content}</div>
+        </div>
+        <StatusBar left={statusLeft} right={connection} rightTitle={connectionTitle} />
+        {overlays}
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <Toolbar
@@ -414,51 +494,7 @@ export default function App() {
         )}
       </div>
       <StatusBar left={statusLeft} right={connection} rightTitle={connectionTitle} />
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
-      {SECTIONS.map((s) => (
-        <div key={s.id} style={{ display: "contents" }}>
-          {sectionUis[s.id].dialogs}
-        </div>
-      ))}
-      {prompt && (
-        <PromptDialog
-          title={prompt.title}
-          label={prompt.label}
-          initial={prompt.initial}
-          okLabel={prompt.okLabel}
-          validate={prompt.validate}
-          onResult={(v) => {
-            setPrompt(null);
-            prompt.resolve(v);
-          }}
-        />
-      )}
-      {typedConfirm && (
-        <TypedConfirmDialog
-          title={typedConfirm.title}
-          confirmText={typedConfirm.confirmText}
-          actionLabel={typedConfirm.actionLabel}
-          onResult={(ok) => {
-            setTypedConfirm(null);
-            typedConfirm.resolve(ok);
-          }}
-        >
-          {typedConfirm.body}
-        </TypedConfirmDialog>
-      )}
-      {confirm && (
-        <ConfirmDialog
-          title={confirm.title}
-          buttons={confirm.buttons}
-          cancelValue={confirm.cancelValue}
-          onResult={(v) => {
-            setConfirm(null);
-            confirm.resolve(v);
-          }}
-        >
-          {confirm.body}
-        </ConfirmDialog>
-      )}
+      {overlays}
     </div>
   );
 }

@@ -53,6 +53,13 @@
   --state-stopped: #8c959f;
   --state-bad: #cf222e;
   --state-stroke: #ffffff;
+  --term-bg: #ffffff;
+  --term-fg: #1b1b1b;
+  --log-err: #b3261e;
+  --log-time: #6b6b6b;
+  --log-hit: #ffe08a;
+  --log-current: #ffb84d;
+  --spark: #0078d7;
 }
 
 :root[data-theme="dark"] {
@@ -106,6 +113,13 @@
   --state-stopped: #6e7681;
   --state-bad: #f85149;
   --state-stroke: #1e1e1e;
+  --term-bg: #1a1a1a;
+  --term-fg: #e4e4e4;
+  --log-err: #ff7b72;
+  --log-time: #8b949e;
+  --log-hit: #6b5a12;
+  --log-current: #9e6a03;
+  --spark: #4aa3f0;
 }
 
 :root {
@@ -463,3 +477,32 @@ button { font: inherit; color: inherit; }
 .page-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-top: 1px solid var(--border-light); background: var(--chrome); flex-wrap: wrap; }
 .page-bar-label { min-width: 110px; text-align: center; }
 .page-size { width: auto; }
+
+/* ---------- Logs ---------- */
+.logs-bar { flex-wrap: wrap; row-gap: 4px; }
+.logs-search { width: 260px; }
+.logs-note { margin: 0 8px 4px; }
+.logs-body { flex: 1; min-height: 0; overflow: auto; background: var(--term-bg); color: var(--term-fg); user-select: text; outline: none; }
+.log-line {
+  position: absolute; left: 0; right: 0; height: 18px; line-height: 18px; padding: 0 8px; white-space: pre;
+  font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 12px;
+}
+.log-line.err { color: var(--log-err); }
+.log-line.current { background: var(--sel); }
+.log-time { color: var(--log-time); margin-right: 10px; }
+.log-line mark { background: var(--log-hit); color: inherit; }
+.log-line.current mark { background: var(--log-current); }
+.logs-footer { padding: 4px 10px; border-top: 1px solid var(--border-light); color: var(--muted); background: var(--panel-bg); }
+
+/* ---------- Terminal ---------- */
+.terminal-host { flex: 1; min-height: 0; padding: 4px 0 0 6px; background: var(--term-bg); }
+
+/* ---------- Stats ---------- */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.stats-tile { min-width: 0; }
+.st-sub { color: var(--muted); font-size: 11px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sparkline { display: block; width: 100%; height: 44px; }
+.sparkline polyline { fill: none; stroke: var(--spark); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+
+/* ---------- Pop-out windows ---------- */
+.app.popout .pane-main { border-top: 1px solid var(--border); }

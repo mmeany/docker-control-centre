@@ -44,13 +44,13 @@ milestones.
 ## Dependency policy
 
 Minimise shipped dependencies; every addition needs a reason.
-- Shipped JS: `react`, `react-dom`, `@tauri-apps/api`. No UI kit, no icon
-  library, no state library. Plain CSS.
+- Shipped JS: `react`, `react-dom`, `@tauri-apps/api`, `@xterm/xterm` +
+  `@xterm/addon-fit` (the container terminal). No UI kit, no icon library, no
+  state library, no chart library (stats draw SVG sparklines). Plain CSS.
 - Rust: `tauri`, `tauri-plugin-dialog`, `serde`, `serde_json`
   (`preserve_order`), `tokio` (sync, fs, io-util, rt, time), `bollard`
   (features `http`, `pipe`: the Docker API), `futures-util` (streams). Disable
   unneeded crate features. Run `cargo audit` before releases.
-- Planned, with reason: `@xterm/xterm` + fit addon (M3, the exec terminal).
 - Native dialogs are opened from Rust commands (`pick_folder`,
   `pick_open_file`, `pick_save_file`), so there is no JS dialog plugin and no
   dialog permissions in capabilities.
@@ -70,7 +70,8 @@ src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
 src/sections/containers/    paths.ts (the @project/name/child path scheme), actions.ts (which
                             verbs apply to which states), views.tsx (inspect tables, details
-                            pane), the section
+                            pane), LogsView / TerminalView / StatsView, streamUtils.ts
+                            (ranges, search, rates, sparklines), the section
 src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
                             openInNewTab, engine, ask,
                             askName, confirmTyped, showError, showFlash, setWorking,
@@ -81,6 +82,7 @@ src/shell/places.ts         Place = { section | null (Home), path }; crumbs, par
 src/api/core.ts             `call` (invoke wrapper), AppError, Settings
 src/api/app.ts              settings, filter history, values, native dialogs
 src/api/engine.ts           engine info, containers, the change feed (Channel)
+src/api/streams.ts          logs, terminal, stats channels; pop-out
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
@@ -92,6 +94,10 @@ src-tauri/src/lib.rs        state, plugins, generate_handler! list
 src-tauri/src/commands/     mod.rs app-level commands + AppState; engine.rs (info,
                             containers, watch_engine); <section>.rs per section
 src-tauri/src/containers.rs container actions and the inspect DTO (unit-tested)
+src-tauri/src/streams.rs    StreamRegistry (per window), log line splitting, UTF-8 carry,
+                            stats maths (unit-tested)
+src-tauri/src/commands/streams.rs  logs, export, terminal (exec), stats commands
+src-tauri/src/commands/window.rs   pop-out windows (popout-N, ?popout=<address>)
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
 src-tauri/src/engine.rs     Endpoint (DOCKER_HOST), Engine, error mapping, DTOs and
                             mapping from bollard models (unit-tested)
@@ -167,6 +173,11 @@ new tab", and paths with their own parser (`isPath`).
   Ctrl+Shift+Tab switch tab, Ctrl+L / Alt+D type an address, Ctrl+Shift+5 /
   6 / 7 list / details / tiles, Alt+Shift+P details pane.
 - Engine lists reload from `shell.engine.changes`, never on a timer.
+- Streams: start returns an id; stop it in the effect cleanup. Rust stops a
+  window's streams, terminals and feed when it closes. A pop-out window
+  (`?popout=<address>`) shows one place, has no `shell.popOut`, and never
+  reads or writes the session.
+- App shortcuts don't fire while focus is in a terminal (`.xterm`).
 
 ## Testing
 
@@ -201,7 +212,7 @@ Details in `PLAN.md`.)
 2. ✅ Container actions: start / stop / restart / pause / kill / remove with
    confirmation, multi-select, list / tiles views, details pane, inspect
    children (env, mounts, ports, networks, labels), session restore.
-3. Logs (follow, search, timestamps, since / until, export), exec terminal,
+3. ✅ Logs (follow, search, timestamps, since / until, export), exec terminal,
    stats, pop-out windows.
 4. Images, volumes, networks: lists, inspect, remove, prune with dry-run
    preview, pull with progress.

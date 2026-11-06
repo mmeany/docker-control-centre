@@ -6,6 +6,7 @@ mod containers;
 mod engine;
 mod error;
 mod settings;
+mod streams;
 mod util;
 mod window;
 
@@ -22,7 +23,9 @@ pub fn run() {
             app.manage(AppState {
                 settings: SettingsStore::new(dir),
                 engine: engine::Engine::from_env(),
-                watcher: Default::default(),
+                watchers: Default::default(),
+                streams: Default::default(),
+                terminals: Default::default(),
             });
             if let Some(main) = app.get_webview_window("main") {
                 window::restore(&main, &app.state::<AppState>().settings);
@@ -44,6 +47,15 @@ pub fn run() {
             commands::engine::watch_engine,
             commands::engine::container_action,
             commands::engine::inspect_container,
+            commands::streams::stream_logs,
+            commands::streams::stop_stream,
+            commands::streams::export_logs,
+            commands::streams::terminal_open,
+            commands::streams::terminal_input,
+            commands::streams::terminal_resize,
+            commands::streams::terminal_close,
+            commands::streams::stream_stats,
+            commands::window::open_popout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the app");

@@ -21,9 +21,11 @@ can reach it controls the engine and, through it, the machine. Only bind it to
 
 - **Containers:** compose projects and standalone containers. Start, stop,
   restart, pause, kill and delete them (a project stands for all of its
-  containers). Open a container for its environment, mounts, ports, networks
-  and labels; logs, terminal, stats and files are being built (see
-  `PLAN.md`). Lists update live from the engine's events.
+  containers). Open a container for live logs (search, timestamps, time
+  ranges, export), a terminal (bash or sh inside it), live stats, and its
+  environment, mounts, ports, networks and labels. Logs, terminal and stats
+  can pop out into their own windows. Files are being built (see `PLAN.md`).
+  Lists update live from the engine's events.
 
 Tabs, the view chosen for each place, the details pane and the window's size
 and position come back the next time you start the app.

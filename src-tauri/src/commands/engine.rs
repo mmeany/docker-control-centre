@@ -30,11 +30,12 @@ pub async fn list_containers(state: State<'_, AppState>) -> Result<Vec<Container
     Ok(list.into_iter().map(engine::container_item).collect())
 }
 
-/// Starts (or restarts) the change feed. Runs until the app exits or the UI
+/// Starts (or restarts) this window's change feed. Runs until the app exits or the UI
 /// calls this again (a reload): pings, reports connected, forwards events, and
 /// on any failure reports disconnected and retries with backoff.
 #[tauri::command]
 pub fn watch_engine(
+    window: tauri::Window,
     state: State<'_, AppState>,
     on_message: Channel<EngineMessage>,
 ) -> Result<(), AppError> {
@@ -86,7 +87,13 @@ pub fn watch_engine(
             delay = (delay * 2).min(Duration::from_secs(10));
         }
     });
-    if let Some(old) = state.watcher.lock().unwrap().replace(task) {
+    // One feed per window: a reload replaces it, a pop-out gets its own.
+    if let Some(old) = state
+        .watchers
+        .lock()
+        .unwrap()
+        .insert(window.label().to_string(), task)
+    {
         old.abort();
     }
     Ok(())

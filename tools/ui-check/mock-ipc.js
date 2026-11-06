@@ -32,6 +32,15 @@
   const settings = { theme: window.__UI_CHECK_THEME__ || "dark", filterHistory: {}, values: {} };
   let engineChannel = null;
   let engineIndex = 0;
+  let streamId = 0;
+  const timers = {};
+  const terminals = {};
+  const channelIndex = {};
+  /** Delivers a message on any channel, in order. */
+  const send = (channel, message) => {
+    const i = (channelIndex[channel.id] = (channelIndex[channel.id] ?? -1) + 1);
+    callbacks[channel.id]?.({ index: i, message });
+  };
   const handlers = {
     get_settings: () => settings,
     set_theme: (a) => ((settings.theme = a.theme), settings),
@@ -112,6 +121,61 @@
       setTimeout(() => window.__engine({ type: "changed", resource: "container", action: a.action.type, id: a.ids[0] }), 10);
       return results;
     },
+    // Streams: a little output now, more on a timer while "following".
+    stream_logs: (a) => {
+      const id = ++streamId;
+      const c = containers.find((x) => x.id === a.id);
+      const t0 = now - 600_000;
+      const lines = Array.from({ length: 300 }, (_, i) => ({
+        err: i % 37 === 0,
+        time: new Date(t0 + i * 1000).toISOString(),
+        text: i % 37 === 0 ? `ERROR request ${i} failed: upstream timed out` : `${c ? c.name : "?"} GET /api/items/${i} 200 ${(i * 7) % 90}ms`,
+      }));
+      setTimeout(() => send(a.onMessage, { type: "lines", lines }), 20);
+      if (a.query.follow) {
+        let n = 300;
+        timers[id] = setInterval(() => send(a.onMessage, { type: "lines", lines: [{ err: false, time: new Date().toISOString(), text: `GET /health 200 ${n++}` }] }), 1000);
+      } else setTimeout(() => send(a.onMessage, { type: "end", error: null }), 40);
+      return id;
+    },
+    stop_stream: (a) => (clearInterval(timers[a.stream]), null),
+    export_logs: () => 300,
+    terminal_open: (a) => {
+      const id = ++streamId;
+      terminals[id] = a.onMessage;
+      setTimeout(() => send(a.onMessage, { type: "output", data: "root@" + a.id.slice(0, 12) + ":/# " }), 20);
+      return id;
+    },
+    terminal_input: (a) => {
+      const ch = terminals[a.session];
+      if (ch) send(ch, { type: "output", data: a.data === "\r" ? "\r\n# " : a.data });
+      return null;
+    },
+    terminal_resize: () => null,
+    terminal_close: (a) => (delete terminals[a.session], null),
+    stream_stats: (a) => {
+      const id = ++streamId;
+      let k = 0;
+      const tick = () => {
+        k++;
+        send(a.onMessage, {
+          time: new Date().toISOString(),
+          cpuPercent: 20 + 15 * Math.sin(k / 3),
+          onlineCpus: 8,
+          memUsed: 180e6 + k * 1e5,
+          memLimit: 8e9,
+          netRx: k * 52_000,
+          netTx: k * 18_000,
+          blockRead: 4e6,
+          blockWrite: k * 4096,
+          pids: 12,
+        });
+      };
+      tick();
+      timers[id] = setInterval(tick, 1000);
+      return id;
+    },
+    open_popout: (a) => ((window.__popouts = [...(window.__popouts || []), a]), null),
     watch_engine: (a) => {
       engineChannel = a.onMessage;
       engineIndex = 0;
