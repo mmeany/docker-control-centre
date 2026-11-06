@@ -2,6 +2,7 @@
 //! keep lists live.
 
 use super::AppState;
+use crate::containers::{self, ActionResult, ContainerAction, ContainerDetails};
 use crate::engine::{self, ContainerItem, EngineInfo, EngineMessage};
 use crate::error::AppError;
 use bollard::query_parameters::ListContainersOptionsBuilder;
@@ -89,4 +90,30 @@ pub fn watch_engine(
         old.abort();
     }
     Ok(())
+}
+
+/// Runs `action` on each container concurrently; one result per id, so the UI
+/// can say which failed.
+#[tauri::command]
+pub async fn container_action(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+    action: ContainerAction,
+) -> Result<Vec<ActionResult>, AppError> {
+    let e = &state.engine;
+    Ok(containers::run_action(e.docker()?, e.endpoint.display(), ids, action).await)
+}
+
+#[tauri::command]
+pub async fn inspect_container(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<ContainerDetails, AppError> {
+    let e = &state.engine;
+    let c = e
+        .docker()?
+        .inspect_container(&id, None)
+        .await
+        .map_err(|x| e.error(x))?;
+    Ok(containers::container_details(c))
 }

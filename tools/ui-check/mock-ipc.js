@@ -55,6 +55,63 @@
     }),
     // Copies, like real IPC: the app must not see the scenario's edits in place.
     list_containers: () => JSON.parse(JSON.stringify(containers)),
+    inspect_container: (a) => {
+      const c = containers.find((x) => x.id === a.id);
+      if (!c) throw { kind: "notFound", message: `No such container: ${a.id}`, detail: "" };
+      const [port, host] = (c.ports[0] || "").split("→").reverse();
+      return {
+        id: c.id,
+        name: c.name,
+        image: c.image,
+        imageId: "sha256:" + c.id,
+        command: c.image.startsWith("nginx") ? '/docker-entrypoint.sh nginx -g "daemon off;"' : "docker-entrypoint.sh",
+        created: c.created,
+        state: c.state,
+        startedAt: c.created,
+        finishedAt: c.state === "exited" ? iso(2) : "",
+        exitCode: c.state === "exited" ? 0 : null,
+        error: "",
+        health: c.name === "postgres" ? "healthy" : "",
+        restartPolicy: c.project ? "unless-stopped" : "no",
+        restartCount: 0,
+        platform: "linux",
+        workingDir: "/",
+        user: "",
+        hostname: c.id.slice(0, 12),
+        project: c.project,
+        service: c.service,
+        projectDir: c.workingDir,
+        env: [
+          { key: "PATH", value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" },
+          { key: "POSTGRES_PASSWORD", value: "example-only" },
+          { key: "TZ", value: "Europe/London" },
+        ],
+        labels: c.project
+          ? [
+              { key: "com.docker.compose.project", value: c.project },
+              { key: "com.docker.compose.service", value: c.service },
+            ]
+          : [],
+        mounts: c.project ? [{ kind: "bind", name: "", source: `${c.workingDir}/data`, destination: "/data", mode: "rw", readWrite: true }] : [],
+        ports: port ? [{ containerPort: port, host: host ? [`0.0.0.0:${host}`, `[::]:${host}`] : [] }] : [],
+        networks: [{ name: c.project ? `${c.project}_default` : "bridge", ipAddress: "172.18.0.2/16", gateway: "172.18.0.1", macAddress: "02:42:ac:12:00:02", aliases: c.service ? [c.service, c.name] : [] }],
+      };
+    },
+    container_action: (a) => {
+      const results = a.ids.map((id) => {
+        const i = containers.findIndex((x) => x.id === id);
+        if (i < 0) return { id, error: "No such container" };
+        const c = containers[i];
+        const t = a.action.type;
+        if (t === "remove") containers.splice(i, 1);
+        else if (t === "start" || t === "restart" || t === "unpause") Object.assign(c, { state: "running", status: "Up 1 second" });
+        else if (t === "pause") Object.assign(c, { state: "paused", status: "Up 3 hours (Paused)" });
+        else Object.assign(c, { state: "exited", status: `Exited (${t === "kill" ? 137 : 0}) 1 second ago` });
+        return { id, error: null };
+      });
+      setTimeout(() => window.__engine({ type: "changed", resource: "container", action: a.action.type, id: a.ids[0] }), 10);
+      return results;
+    },
     watch_engine: (a) => {
       engineChannel = a.onMessage;
       engineIndex = 0;

@@ -30,6 +30,74 @@ export interface ContainerItem {
   workingDir: string | null;
 }
 
+export type ContainerAction =
+  | { type: "start" | "stop" | "restart" | "pause" | "unpause" | "kill" }
+  | { type: "remove"; force: boolean; volumes: boolean };
+
+/** One container's outcome; error is null when it worked. */
+export interface ActionResult {
+  id: string;
+  error: string | null;
+}
+
+export interface KeyValue {
+  key: string;
+  value: string;
+}
+
+export interface MountInfo {
+  kind: string;
+  name: string;
+  source: string;
+  destination: string;
+  mode: string;
+  readWrite: boolean;
+}
+
+export interface PortInfo {
+  /** "80/tcp". */
+  containerPort: string;
+  /** "0.0.0.0:8080"; empty when only exposed. */
+  host: string[];
+}
+
+export interface NetworkInfo {
+  name: string;
+  ipAddress: string;
+  gateway: string;
+  macAddress: string;
+  aliases: string[];
+}
+
+export interface ContainerDetails {
+  id: string;
+  name: string;
+  image: string;
+  imageId: string;
+  command: string;
+  created: string;
+  state: ContainerState;
+  startedAt: string;
+  finishedAt: string;
+  exitCode: number | null;
+  error: string;
+  health: string;
+  restartPolicy: string;
+  restartCount: number;
+  platform: string;
+  workingDir: string;
+  user: string;
+  hostname: string;
+  project: string | null;
+  service: string | null;
+  projectDir: string | null;
+  env: KeyValue[];
+  labels: KeyValue[];
+  mounts: MountInfo[];
+  ports: PortInfo[];
+  networks: NetworkInfo[];
+}
+
 export type EngineResource = "container" | "image" | "volume" | "network";
 
 export type EngineMessage =
@@ -40,6 +108,8 @@ export type EngineMessage =
 export const engineApi = {
   info: () => call<EngineInfo>("engine_info"),
   listContainers: () => call<ContainerItem[]>("list_containers"),
+  inspectContainer: (id: string) => call<ContainerDetails>("inspect_container", { id }),
+  containerAction: (ids: string[], action: ContainerAction) => call<ActionResult[]>("container_action", { ids, action }),
   /** Starts the change feed (replacing any earlier one). Async so that a
    *  missing Tauri runtime (plain browser) rejects instead of throwing. */
   watch: async (onMessage: (m: EngineMessage) => void) => {

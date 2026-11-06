@@ -83,6 +83,12 @@ export function useTabs<T>(root: T, same: Same<T>) {
       closeTab: (id: number) => setState((s) => closeTab(s, id, root)),
       selectTab: (id: number) => setState((s) => selectTab(s, id)),
       cycleTab: (step: 1 | -1) => setState((s) => cycleTab(s, step)),
+      /** Replaces every tab (session restore); `active` is an index. */
+      restore: (places: T[], active: number) =>
+        setState(() => {
+          const s = initTabs(places.length ? places : [root]);
+          return { ...s, active: s.tabs[Math.min(Math.max(active, 0), s.tabs.length - 1)].id };
+        }),
     }),
     [root, same],
   );

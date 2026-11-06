@@ -471,5 +471,16 @@ mod integration {
             .collect();
         assert_eq!(items.len() as i64, info.containers);
         assert!(items.iter().all(|c| !c.id.is_empty() && !c.name.is_empty()));
+        for c in &items {
+            let d = crate::containers::container_details(
+                docker
+                    .inspect_container(&c.id, None)
+                    .await
+                    .expect("inspect"),
+            );
+            assert_eq!(d.id, c.id);
+            assert_eq!(d.name, c.name);
+            assert_eq!(d.state, c.state);
+        }
     }
 }

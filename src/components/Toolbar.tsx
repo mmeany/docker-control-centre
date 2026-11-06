@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
+import type { ViewMode } from "./FileList";
 import { HOME, placeCrumbs, type Place } from "../shell/places";
 import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
 
@@ -25,6 +26,10 @@ interface Props {
   canUp: boolean;
   /** Command-bar buttons from the active section. */
   commands: ReactNode;
+  view: ViewMode;
+  onViewChange: (v: ViewMode) => void;
+  detailsPane: boolean;
+  onToggleDetailsPane: () => void;
   /** Copyable address of the current place. */
   uri: string;
   /** Bumped to put the address bar into edit mode (Ctrl+L, Alt+D). */
@@ -39,6 +44,12 @@ interface Props {
   /** A typed address; returns false if it leads nowhere (the bar stays open). */
   onSubmitAddress: (text: string) => boolean;
 }
+
+const VIEWS: { id: ViewMode; label: string; keys: string }[] = [
+  { id: "details", label: "Details", keys: "Ctrl+Shift+6" },
+  { id: "list", label: "List", keys: "Ctrl+Shift+5" },
+  { id: "tiles", label: "Tiles", keys: "Ctrl+Shift+7" },
+];
 
 /** Three rows: tabs (+ theme), command bar, navigation + address bar. */
 export function Toolbar(p: Props) {
@@ -92,7 +103,32 @@ export function Toolbar(p: Props) {
         </select>
       </div>
 
-      <div className="toolbar-row command-bar">{p.commands}</div>
+      <div className="toolbar-row command-bar">
+        {p.commands}
+        <div className="spacer" />
+        <div className="segmented" role="radiogroup" aria-label="View">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              role="radio"
+              aria-checked={p.view === v.id}
+              className={p.view === v.id ? "active" : ""}
+              title={`${v.label} (${v.keys})`}
+              onClick={() => p.onViewChange(v.id)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <button
+          className={`cmd-btn ${p.detailsPane ? "pressed" : ""}`}
+          aria-pressed={p.detailsPane}
+          title="Show or hide the details pane (Alt+Shift+P)"
+          onClick={p.onToggleDetailsPane}
+        >
+          <span className="cmd-label">Details pane</span>
+        </button>
+      </div>
 
       <div className="toolbar-row">
         <button className="tool-btn" title="Back (Alt+Left)" onClick={p.onBack} disabled={!p.canBack}>

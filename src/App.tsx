@@ -7,7 +7,7 @@ import { appApi } from "./api/app";
 import type { AppError, Settings, ThemePref } from "./api/core";
 import { ConfirmDialog, type ConfirmButton } from "./components/ConfirmDialog";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
-import { FileList, type Column, type Row } from "./components/FileList";
+import { FileList, type Column, type Row, type ViewMode } from "./components/FileList";
 import { ServerIcon } from "./components/Icons";
 import { PromptDialog } from "./components/PromptDialog";
 import { StatusBar } from "./components/StatusBar";
@@ -18,6 +18,7 @@ import { SECTIONS } from "./sections";
 import { HOME, parentPlace, parseAddress, placeCrumbs, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
 import type { SectionUi, Shell } from "./shell/shell";
 import { useEngine } from "./state/engine";
+import { DETAILS_PANE_KEY, readSession, readViews, SESSION_KEY, VIEWS_KEY, withView, type SavedSession } from "./state/session";
 import { useTabs } from "./state/tabs";
 import { useTheme } from "./state/theme";
 
@@ -86,11 +87,52 @@ export default function App() {
   const themePref: ThemePref = settings?.theme ?? "system";
   useTheme(themePref);
 
+  // Session: tabs, views and the details pane come back from settings once,
+  // then are saved (debounced) whenever they change.
+  const [views, setViews] = useState<Record<string, ViewMode>>({});
+  const [detailsPane, setDetailsPane] = useState(false);
+  const [restored, setRestored] = useState(false);
+
   useEffect(() => {
     appApi
       .getSettings()
-      .then(setSettings)
-      .catch(() => setSettings({ theme: "system", filterHistory: {}, values: {} }));
+      .then((s) => {
+        setSettings(s);
+        const session = readSession(s.values[SESSION_KEY]);
+        if (session) nav.restore(session.places, session.active);
+        setViews(readViews(s.values[VIEWS_KEY]));
+        setDetailsPane(s.values[DETAILS_PANE_KEY] === true);
+      })
+      .catch(() => setSettings({ theme: "system", filterHistory: {}, values: {} }))
+      .finally(() => setRestored(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const tabUris = nav.tabs.map((t) => placeUri(t.stack[t.index]));
+  const activeIndex = nav.tabs.findIndex((t) => t.id === nav.active);
+  const sessionJson = JSON.stringify({ tabs: tabUris, active: activeIndex } satisfies SavedSession);
+  useEffect(() => {
+    if (!restored) return;
+    const t = window.setTimeout(() => {
+      appApi.setValue(SESSION_KEY, JSON.parse(sessionJson)).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [restored, sessionJson]);
+
+  const view: ViewMode = views[placeUri(place)] ?? "details";
+  const changeView = useCallback(
+    (mode: ViewMode) => {
+      const next = withView(views, placeUri(place), mode);
+      setViews(next);
+      appApi.setValue(VIEWS_KEY, next).catch(() => {});
+    },
+    [views, place],
+  );
+  const toggleDetailsPane = useCallback(() => {
+    setDetailsPane((v) => {
+      appApi.setValue(DETAILS_PANE_KEY, !v).catch(() => {});
+      return !v;
+    });
   }, []);
 
   async function changeTheme(theme: ThemePref) {
@@ -150,6 +192,7 @@ export default function App() {
     navigate: nav.navigate,
     openInNewTab: (p) => nav.openTab(p),
     engine,
+    view,
     ask,
     askName,
     confirmTyped,
@@ -205,8 +248,21 @@ export default function App() {
         e.preventDefault();
         setEditAddress((n) => n + 1);
         return;
+      } else if (ctrl && e.shiftKey && ["Digit5", "Digit6", "Digit7"].includes(e.code)) {
+        e.preventDefault();
+        changeView(({ Digit5: "list", Digit6: "details", Digit7: "tiles" } as const)[e.code as "Digit5"]);
+        return;
+      } else if (e.altKey && e.shiftKey && k === "p") {
+        e.preventDefault();
+        toggleDetailsPane();
+        return;
       }
       if (t.closest("input, textarea, select")) return;
+      if (e.key === "Delete" && active?.onDelete) {
+        e.preventDefault();
+        active.onDelete();
+        return;
+      }
       if (e.key === "Backspace" || (e.altKey && e.key === "ArrowUp")) {
         e.preventDefault();
         goUp();
@@ -223,7 +279,7 @@ export default function App() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goUp, nav, refresh, place]);
+  }, [goUp, nav, refresh, place, changeView, toggleDetailsPane, active]);
 
   // Keep the selected tree node in view.
   useEffect(() => {
@@ -275,6 +331,7 @@ export default function App() {
       onSelectionChange={setHomeSelected}
       onOpen={(id) => nav.navigate(rootOf(SECTIONS.find((s) => s.id === id)!))}
       emptyText="No sections"
+      view={view}
     />
   );
 
@@ -326,6 +383,10 @@ export default function App() {
         canForward={nav.canForward}
         canUp={parentPlace(place) !== null}
         commands={active?.commands}
+        view={view}
+        onViewChange={changeView}
+        detailsPane={detailsPane}
+        onToggleDetailsPane={toggleDetailsPane}
         uri={placeUri(place)}
         onRefresh={refresh}
         onCopyLocation={() => void copyText(placeUri(place))}
@@ -346,6 +407,11 @@ export default function App() {
         </div>
         <div className="splitter" onMouseDown={startResize} />
         <div className="pane-main">{content}</div>
+        {detailsPane && (
+          <aside className="pane-details" aria-label="Details">
+            {active?.details ?? <div className="empty-note">Select an item to see its details.</div>}
+          </aside>
+        )}
       </div>
       <StatusBar left={statusLeft} right={connection} rightTitle={connectionTitle} />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}

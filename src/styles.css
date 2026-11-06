@@ -189,6 +189,17 @@ button { font: inherit; color: inherit; }
 .splitter { width: 5px; cursor: col-resize; background: var(--chrome); border-left: 1px solid var(--border-light); border-right: 1px solid var(--border-light); flex-shrink: 0; }
 .pane-main { flex: 1; min-width: 0; background: var(--pane); display: flex; flex-direction: column; overflow: hidden; }
 
+.cmd-btn.pressed { background: var(--sel); border-color: var(--sel-border); }
+.command-bar .segmented { margin-right: 4px; }
+.pane-details { width: 300px; flex-shrink: 0; border-left: 1px solid var(--border-light); background: var(--panel-bg); overflow: auto; user-select: text; }
+.details-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 8px; }
+.details-head .fl-icon svg { width: 40px; height: 40px; }
+.details-title { font-size: 14px; font-weight: 600; word-break: break-all; }
+.details-sub { color: var(--muted); }
+.pane-details .props-table { margin: 0 14px; width: calc(100% - 28px); }
+.pane-details .props-table th { width: 90px; }
+.pane-details .empty-note { padding: 14px; }
+
 /* ---------- Tree ---------- */
 .tree { padding: 4px 0; }
 .tree-row {
@@ -221,6 +232,21 @@ button { font: inherit; color: inherit; }
 .file-list:not(:focus-within) .fl-row.selected { background: var(--sel-inactive); border-color: transparent; }
 .fl-cell { display: flex; align-items: center; gap: 6px; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fl-icon { display: inline-flex; flex-shrink: 0; }
+
+/* List and tiles views */
+.fl-flow { flex: 1; overflow: auto; padding: 4px; display: grid; align-content: start; }
+.fl-list { grid-auto-flow: column; grid-template-rows: repeat(auto-fill, 22px); grid-auto-columns: 240px; overflow-y: hidden; }
+.fl-tiles { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); grid-auto-rows: 58px; gap: 2px; }
+.fl-item { display: flex; align-items: center; gap: 6px; padding: 0 6px; border: 1px solid transparent; min-width: 0; white-space: nowrap; }
+.fl-item:hover { background: var(--hover); }
+.fl-item.selected { background: var(--sel); border-color: var(--sel-border); }
+.file-list:not(:focus-within) .fl-item.selected { background: var(--sel-inactive); border-color: transparent; }
+.fl-item.dimmed { opacity: 0.5; }
+.fl-item-name { overflow: hidden; text-overflow: ellipsis; }
+.fl-tiles .fl-item { gap: 10px; padding: 4px 8px; }
+.fl-tiles .fl-icon svg { width: 36px; height: 36px; }
+.fl-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.fl-tile-sub { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 
 .empty-note { color: var(--muted); padding: 12px; }
 .empty-note.center { margin: auto; text-align: center; max-width: 480px; line-height: 1.6; }

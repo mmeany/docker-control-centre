@@ -68,7 +68,9 @@ src/App.tsx                 shell: theme, layout, history, shared dialogs; runs 
 src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs /
                             parent / uri helpers, controller hook)
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
-src/sections/containers/    paths.ts (the @project/name/child path scheme) + the section
+src/sections/containers/    paths.ts (the @project/name/child path scheme), actions.ts (which
+                            verbs apply to which states), views.tsx (inspect tables, details
+                            pane), the section
 src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
                             openInNewTab, engine, ask,
                             askName, confirmTyped, showError, showFlash, setWorking,
@@ -82,12 +84,15 @@ src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
-                            engine.ts (useEngine: status, info, change counters)
+                            engine.ts (useEngine: status, info, change counters),
+                            session.ts (tabs, views per place, details pane: restored)
 src/components/             shared UI (below)
 src/styles.css              every style; tokens at the top
 src-tauri/src/lib.rs        state, plugins, generate_handler! list
 src-tauri/src/commands/     mod.rs app-level commands + AppState; engine.rs (info,
                             containers, watch_engine); <section>.rs per section
+src-tauri/src/containers.rs container actions and the inspect DTO (unit-tested)
+src-tauri/src/window.rs     window size / position / maximised, restored before showing
 src-tauri/src/engine.rs     Endpoint (DOCKER_HOST), Engine, error mapping, DTOs and
                             mapping from bollard models (unit-tested)
 src-tauri/src/error.rs      AppError {kind, message, detail}; AppError::io
@@ -99,8 +104,11 @@ scripts/rename.mjs          one-off: name the app, optionally drop the sample
 
 ### Shared components
 
-- `FileList`: virtualised details view (sort, multi-select, keyboard, context
-  menu, `dimmed` rows). Fixed ROW_H = 22px, must match `.fl-row` CSS.
+- `FileList`: details (virtualised), list and tiles views (`view`, from
+  `shell.view`; the shell keeps it per place). Sort, multi-select, keyboard,
+  context menu, `dimmed` rows. Fixed ROW_H = 22px, must match `.fl-row` CSS.
+- Details pane: a section returns `details` (for the selection, else the open
+  item); the shell shows it when the pane is on. `onDelete` handles Del.
 - `TreeRow` / `TreeNote`: tree rows with twisty, selection, context menu.
 - `CommandButton` / `CommandSeparator`: command-bar buttons.
 - `FilterBox`: text filter with remembered history (`appApi.rememberFilter`),
@@ -156,7 +164,8 @@ new tab", and paths with their own parser (`isPath`).
 - Explorer shortcuts: Enter open, Backspace / Alt+↑ up, Alt+← / Alt+→ back /
   forward, F5 refresh, Del delete, F2 rename, Ctrl+Shift+N new, Ctrl+E edit,
   Alt+Enter properties, Ctrl+T new tab, Ctrl+W close tab, Ctrl+Tab /
-  Ctrl+Shift+Tab switch tab, Ctrl+L / Alt+D type an address.
+  Ctrl+Shift+Tab switch tab, Ctrl+L / Alt+D type an address, Ctrl+Shift+5 /
+  6 / 7 list / details / tiles, Alt+Shift+P details pane.
 - Engine lists reload from `shell.engine.changes`, never on a timer.
 
 ## Testing
@@ -189,7 +198,7 @@ Details in `PLAN.md`.)
 1. ✅ Explorer shell: tabs with per-tab history, typed addresses, engine
    connection + change feed, Containers section (projects, containers,
    container children as placeholders), sample section removed.
-2. Container actions: start / stop / restart / pause / kill / remove with
+2. ✅ Container actions: start / stop / restart / pause / kill / remove with
    confirmation, multi-select, list / tiles views, details pane, inspect
    children (env, mounts, ports, networks, labels), session restore.
 3. Logs (follow, search, timestamps, since / until, export), exec terminal,

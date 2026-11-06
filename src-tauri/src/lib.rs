@@ -2,10 +2,12 @@
 //! Add a section's commands to `generate_handler!` below.
 
 mod commands;
+mod containers;
 mod engine;
 mod error;
 mod settings;
 mod util;
+mod window;
 
 use commands::AppState;
 use settings::SettingsStore;
@@ -22,6 +24,10 @@ pub fn run() {
                 engine: engine::Engine::from_env(),
                 watcher: Default::default(),
             });
+            if let Some(main) = app.get_webview_window("main") {
+                window::restore(&main, &app.state::<AppState>().settings);
+                window::save_on_close(&main);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -36,6 +42,8 @@ pub fn run() {
             commands::engine::engine_info,
             commands::engine::list_containers,
             commands::engine::watch_engine,
+            commands::engine::container_action,
+            commands::engine::inspect_container,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the app");

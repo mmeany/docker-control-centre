@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { ConfirmButton } from "../components/ConfirmDialog";
 import type { MenuItem } from "../components/ContextMenu";
+import type { ViewMode } from "../components/FileList";
 import type { EngineState } from "../state/engine";
 import type { Place } from "./places";
 
@@ -12,6 +13,8 @@ export interface Shell {
   openInNewTab: (p: Place) => void;
   /** Connection, engine info and change counters. */
   engine: EngineState;
+  /** View chosen for this place (pass to FileList). */
+  view: ViewMode;
   /** Modal question; resolves with the chosen button's value. */
   ask: (title: string, body: ReactNode, buttons: ConfirmButton<string>[], cancelValue: string) => Promise<string>;
   /** Single-line text prompt; resolves with the value or null if cancelled. */
@@ -47,4 +50,8 @@ export interface SectionUi {
   refresh: () => void;
   /** Dialogs the section has open. */
   dialogs: ReactNode;
+  /** Details pane content for the selection (or the open item). */
+  details?: ReactNode;
+  /** Del key. */
+  onDelete?: () => void;
 }

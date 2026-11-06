@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 
+/** Explorer's views: details (columns), list (names flowing in columns), tiles. */
+export type ViewMode = "details" | "list" | "tiles";
+
 export interface Column {
   id: string;
   label: string;
@@ -28,6 +31,8 @@ interface Props {
   /** Reports row keys in display (sorted) order, e.g. for preview next/previous. */
   onOrderChange?: (keys: string[]) => void;
   emptyText: string;
+  /** Default details. List and tiles aren't virtualised: fine for hundreds of rows. */
+  view?: ViewMode;
 }
 
 type Sort = { col: string; dir: 1 | -1 };
@@ -38,7 +43,7 @@ const ROW_H = 22;
 const OVERSCAN = 12;
 
 /** Details-view list with sortable columns and Explorer-style selection. */
-export function FileList({ columns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText }: Props) {
+export function FileList({ columns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details" }: Props) {
   const [sort, setSort] = useState<Sort>({ col: columns[0].id, dir: 1 });
   const anchor = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -80,6 +85,10 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
   function ensureVisible(index: number) {
     const el = bodyRef.current;
     if (!el) return;
+    if (view !== "details") {
+      el.querySelectorAll<HTMLElement>("[data-key]")[index]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      return;
+    }
     const top = index * ROW_H;
     if (top < el.scrollTop) el.scrollTop = top;
     else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
@@ -112,9 +121,11 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
     if (sorted.length === 0) return;
     const keys = sorted.map((r) => r.key);
     const current = anchor.current && keys.includes(anchor.current) ? keys.indexOf(anchor.current) : -1;
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    const step: Record<string, number> = { ArrowDown: 1, ArrowUp: -1 };
+    if (view !== "details") Object.assign(step, { ArrowRight: 1, ArrowLeft: -1 });
+    if (e.key in step) {
       e.preventDefault();
-      const next = Math.min(keys.length - 1, Math.max(0, current + (e.key === "ArrowDown" ? 1 : -1)));
+      const next = Math.min(keys.length - 1, Math.max(0, current + step[e.key]));
       anchor.current = keys[next];
       onSelectionChange(new Set([keys[next]]));
       ensureVisible(next);
@@ -135,6 +146,53 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
 
   function headerClick(col: string) {
     setSort((s) => (s.col === col ? { col, dir: (s.dir * -1) as 1 | -1 } : { col, dir: 1 }));
+  }
+
+  const onBodyContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    const row = (e.target as HTMLElement).closest<HTMLElement>("[data-key]");
+    const key = row?.dataset.key ?? null;
+    if (key === null) onSelectionChange(new Set());
+    else if (!selected.has(key)) {
+      anchor.current = key;
+      onSelectionChange(new Set([key]));
+    }
+    onContextMenu?.(key, e.clientX, e.clientY);
+  };
+  const onBodyClick = (e: MouseEvent) => {
+    if (!(e.target as HTMLElement).closest("[data-key]")) onSelectionChange(new Set());
+  };
+
+  if (view !== "details") {
+    const [second, third] = columns.slice(1).map((c) => c.id);
+    return (
+      <div className="file-list" tabIndex={0} onKeyDown={onKeyDown}>
+        <div className={`fl-flow fl-${view}`} ref={bodyRef} onContextMenu={onBodyContextMenu} onClick={onBodyClick}>
+          {sorted.length === 0 && <div className="empty-note">{emptyText}</div>}
+          {sorted.map((r) => (
+            <div
+              key={r.key}
+              data-key={r.key}
+              className={`fl-item ${selected.has(r.key) ? "selected" : ""} ${r.dimmed ? "dimmed" : ""}`}
+              title={r.cells[columns[0].id]?.text}
+              onClick={(e) => clickRow(e, r.key)}
+              onDoubleClick={() => onOpen(r.key)}
+            >
+              <span className="fl-icon">{r.icon}</span>
+              {view === "list" ? (
+                <span className="fl-item-name">{r.cells[columns[0].id]?.text ?? ""}</span>
+              ) : (
+                <span className="fl-tile-text">
+                  <span className="fl-item-name">{r.cells[columns[0].id]?.text ?? ""}</span>
+                  {second && <span className="fl-tile-sub">{r.cells[second]?.text ?? ""}</span>}
+                  {third && <span className="fl-tile-sub">{r.cells[third]?.text ?? ""}</span>}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const template = columns.map((c) => `${c.width}px`).join(" ") + " 1fr";
@@ -161,22 +219,8 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
         className="fl-body"
         ref={bodyRef}
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          const row = (e.target as HTMLElement).closest<HTMLElement>(".fl-row");
-          const key = row?.dataset.key ?? null;
-          if (key === null) onSelectionChange(new Set());
-          else if (!selected.has(key)) {
-            anchor.current = key;
-            onSelectionChange(new Set([key]));
-          }
-          onContextMenu?.(key, e.clientX, e.clientY);
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("fl-canvas")) {
-            onSelectionChange(new Set());
-          }
-        }}
+        onContextMenu={onBodyContextMenu}
+        onClick={onBodyClick}
       >
         {sorted.length === 0 && <div className="empty-note">{emptyText}</div>}
         <div className="fl-canvas" style={{ height: sorted.length * ROW_H, position: "relative" }}>

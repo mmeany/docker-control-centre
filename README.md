@@ -19,9 +19,14 @@ can reach it controls the engine and, through it, the machine. Only bind it to
 
 ## Sections
 
-- **Containers:** compose projects and standalone containers. Open a container
-  for its logs, terminal, stats, files and settings (being built, see
+- **Containers:** compose projects and standalone containers. Start, stop,
+  restart, pause, kill and delete them (a project stands for all of its
+  containers). Open a container for its environment, mounts, ports, networks
+  and labels; logs, terminal, stats and files are being built (see
   `PLAN.md`). Lists update live from the engine's events.
+
+Tabs, the view chosen for each place, the details pane and the window's size
+and position come back the next time you start the app.
 
 ## Prerequisites (developer machine only)
 
@@ -87,3 +92,6 @@ To build only the setup program: `npm run tauri build -- --bundles nsis`.
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+L, Alt+D | Type an address (e.g. `/containers/@shop/shop-web-1`) |
 | Middle-click a tab | Close it |
+| Del | Delete the selected containers (asks first) |
+| Ctrl+Shift+5 / 6 / 7 | List / details / tiles view |
+| Alt+Shift+P | Show or hide the details pane |

@@ -242,3 +242,37 @@ export function CloseIcon({ size = 10 }: P) {
     </svg>
   );
 }
+
+export function PlayIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M4.5 2.5 L13 8 L4.5 13.5 Z" fill="#3fb950" stroke="#2a7f3a" strokeWidth="0.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function StopIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="3" y="3" width="10" height="10" rx="1" fill="#d9534f" stroke="#a12f2b" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="3.5" y="3" width="3" height="10" rx="0.6" fill="#d4a72c" stroke="#9a7614" strokeWidth="0.7" />
+      <rect x="9.5" y="3" width="3" height="10" rx="0.6" fill="#d4a72c" stroke="#9a7614" strokeWidth="0.7" />
+    </svg>
+  );
+}
+
+export function RestartIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <path d="M12.5 8 A4.5 4.5 0 1 1 10.8 4.4" fill="none" stroke="#3d82c4" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M9.6 2.2 L12.6 4.2 L9.4 5.9 Z" fill="#3d82c4" />
+    </svg>
+  );
+}
