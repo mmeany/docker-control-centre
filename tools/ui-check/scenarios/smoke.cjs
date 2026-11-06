@@ -8,7 +8,7 @@ module.exports = async (page, { shot }) => {
   // Into Containers: projects first, then standalone containers.
   await page.dblclick(".fl-row:has-text('Containers')");
   await page.waitForSelector(".fl-row:has-text('monitoring')");
-  await page.waitForSelector(".status-bar:has-text('2 projects · 7 containers · 4 running')");
+  await page.waitForSelector(".status-bar:has-text('2 projects · 8 containers · 5 running')");
   await shot("containers");
 
   // Project, container, child.

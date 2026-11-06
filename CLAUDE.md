@@ -78,6 +78,10 @@ src/sections/images/, volumes/, networks/   one-level sections (list + item deta
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
                             RunDialog (streamed output), the section
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
+src/status/                 status.ts: one state model for containers, projects, images,
+                            volumes, networks (unit-tested); LegendDialog
+src/components/StatusMark.tsx  the mark per state (shape + colour); SectionBadge counts
+src/sections/ResourceTree.tsx  tree branch with an "Orphaned (n)" folder
 src/sections/rules.ts       what uses what; prune candidates (unit-tested); flatPaths
 src/sections/common.tsx     NameList, PropsTable, UsedBy, runRemoval
 src/state/engineList.ts     useEngineList: load + reload on a resource's changes
@@ -210,6 +214,10 @@ new tab", and paths with their own parser (`isPath`).
   (`?popout=<address>`) shows one place, has no `shell.popOut`, and never
   reads or writes the session.
 - App shortcuts don't fire while focus is in a terminal (`.xterm`).
+- Status colours come only from `src/status/status.ts` (tokens `--st-*` in
+  styles.css, light and dark). Give tree rows and list rows a `status`; never
+  colour by raw state. Prune candidates are built on the same model, so
+  orange is exactly what "Orphaned only" removes.
 - Container files: folders are addresses (`…/web-1/files/etc/nginx`). Listing
   tries exec (a POSIX sh script with `stat`) and falls back to the archive API
   (stopped containers, no shell; capped at 64 MB read). Copy out saves a file
@@ -260,3 +268,7 @@ Details in `PLAN.md`.)
    app icon, README with screenshots, WSL setup guide, changelog. Repo still
    private: `gh repo edit mmeany/docker-control-centre --visibility public
    --accept-visibility-change-consequences` when ready.
+8. ✅ Status colours (see PLAN.md, M8): running, idle, unused,
+   orphaned, error marks and colours in the tree, lists, tabs and details
+   pane; project roll-ups; "Orphaned (n)" folders; section badges; Help ›
+   Legend; "Orphaned only" prune.

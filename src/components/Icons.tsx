@@ -166,13 +166,12 @@ export function DriveIcon({ size = 16 }: P) {
   );
 }
 
-/** A container; `state` colours the corner dot (running, paused, exited, …). */
-export function ContainerIcon({ size = 16, state }: P & { state?: string }) {
+/** A container. Its state is shown by a StatusMark beside it. */
+export function ContainerIcon({ size = 16 }: P) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
       <path d="M2 4.5 L8 2 L14 4.5 V11.5 L8 14 L2 11.5 Z" fill="#dbe8f5" stroke="#3d6e9e" strokeWidth="0.9" strokeLinejoin="round" />
       <path d="M2 4.5 L8 7 L14 4.5 M8 7 V14" fill="none" stroke="#3d6e9e" strokeWidth="0.8" />
-      {state !== undefined && <circle className={`state-dot state-${state || "unknown"}`} cx="12.5" cy="12.5" r="2.6" strokeWidth="0.8" />}
     </svg>
   );
 }

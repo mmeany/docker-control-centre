@@ -35,6 +35,8 @@ import { FilesView } from "./FilesView";
 import { LogsView } from "./LogsView";
 import { StatsView } from "./StatsView";
 import { ContainerPane, InspectChild, INSPECT_CHILDREN, ProjectPane, SelectionPane } from "./views";
+import { attention, containerStatus, projectStatus } from "../../status/status";
+import { SectionBadge } from "../../components/SectionBadge";
 
 /** xterm is big: load it the first time a terminal opens (its own chunk). */
 const TerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
@@ -136,6 +138,9 @@ export function useContainersSection(shell: Shell): SectionUi {
   }, [items]);
 
   const byName = useMemo(() => new Map((items ?? []).map((c) => [c.name, c])), [items]);
+  const pinnedNames = useMemo(() => new Set(shell.composePinned.map((p) => p.name)), [shell.composePinned]);
+  // Only containers with a problem: projects roll up the same containers.
+  const sectionAttention = useMemo(() => ({ ...attention((items ?? []).map(containerStatus)), orphans: 0 }), [items]);
   const projectByName = useMemo(() => new Map(projects.map((p) => [p.name, p])), [projects]);
 
   const project = loc?.kind === "project" ? projectByName.get(loc.project) : undefined;
@@ -290,11 +295,12 @@ export function useContainersSection(shell: Shell): SectionUi {
   function containerRow(c: ContainerItem): Row {
     return {
       key: containerPath(c.project, c.name),
-      icon: <ContainerIcon state={c.state} />,
+      icon: <ContainerIcon />,
       isContainer: false,
+      status: containerStatus(c),
       cells: {
         name: { text: c.name, sort: c.name.toLowerCase() },
-        state: { text: c.state || "unknown", sort: STATE_ORDER[c.state] ?? 9 },
+        state: { text: containerStatus(c).label, sort: STATE_ORDER[c.state] ?? 9 },
         image: { text: c.image, sort: c.image },
         status: { text: c.status, sort: c.status },
         ports: { text: c.ports.join(", "), sort: c.ports.join(",") },
@@ -308,9 +314,10 @@ export function useContainersSection(shell: Shell): SectionUi {
       key: projectPath(p.name),
       icon: <ProjectIcon />,
       isContainer: true,
+      status: projectStatus(p.containers, pinnedNames.has(p.name)),
       cells: {
         name: { text: p.name, sort: p.name },
-        state: { text: summarise(p.containers), sort: p.running === p.containers.length ? 0 : 5 },
+        state: { text: projectStatus(p.containers, pinnedNames.has(p.name)).label, sort: p.running === p.containers.length ? 0 : 5 },
         image: { text: "Compose project", sort: "" },
         status: { text: plural(p.containers.length, "container"), sort: p.containers.length },
         ports: { text: "", sort: "" },
@@ -404,8 +411,9 @@ export function useContainersSection(shell: Shell): SectionUi {
         key={p}
         depth={depth}
         label={c.name}
-        icon={<ContainerIcon state={c.state} />}
-        title={`${c.name}: ${c.status}`}
+        icon={<ContainerIcon />}
+        status={containerStatus(c)}
+        title={c.status}
         selected={active && isInContainer(loc) && loc.name === c.name}
         onClick={() => go(p)}
         onContextMenu={(x, y) => openContextMenu(p, x, y)}
@@ -426,7 +434,7 @@ export function useContainersSection(shell: Shell): SectionUi {
             depth={2}
             label={p.name}
             icon={<ProjectIcon />}
-            title={`${p.name}: ${summarise(p.containers)}`}
+            status={projectStatus(p.containers, pinnedNames.has(p.name))}
             selected={active && loc?.kind === "project" && loc.project === p.name}
             expanded={expanded.has(p.name)}
             onClick={() => go(projectPath(p.name))}
@@ -452,6 +460,7 @@ export function useContainersSection(shell: Shell): SectionUi {
       depth={1}
       label="Containers"
       icon={<ContainerIcon />}
+      badge={<SectionBadge {...sectionAttention} />}
       selected={active && loc?.kind === "root"}
       expanded={open}
       onClick={() => go("")}
@@ -543,14 +552,15 @@ export function useContainersSection(shell: Shell): SectionUi {
     // Details pane: the selection, else the open container or project.
     if (selected.size === 1 && single) {
       const l = parseContainers(single);
-      if (l?.kind === "project" && projectByName.get(l.project)) details = <ProjectPane name={l.project} containers={projectByName.get(l.project)!.containers} />;
+      if (l?.kind === "project" && projectByName.get(l.project))
+        details = <ProjectPane name={l.project} containers={projectByName.get(l.project)!.containers} pinned={pinnedNames.has(l.project)} />;
       else if (singleItem) details = <ContainerPane item={singleItem} details={inspectedFor(singleItem.id)?.details ?? null} />;
     } else if (selected.size > 1 && targets.length > 0) {
       details = <SelectionPane items={targets} />;
     } else if (container) {
       details = <ContainerPane item={container} details={inspectedFor(container.id)?.details ?? null} />;
     } else if (project) {
-      details = <ProjectPane name={project.name} containers={project.containers} />;
+      details = <ProjectPane name={project.name} containers={project.containers} pinned={pinnedNames.has(project.name)} />;
     }
   }
 
@@ -564,6 +574,19 @@ export function useContainersSection(shell: Shell): SectionUi {
     dialogs: null,
     details,
     onDelete: targets.length ? () => void remove(targets) : undefined,
+    attention: sectionAttention,
+    placeStatus: (p: string) => {
+      const l = parseContainers(p);
+      if (l?.kind === "project") {
+        const pr = projectByName.get(l.project);
+        return pr ? projectStatus(pr.containers, pinnedNames.has(pr.name)) : undefined;
+      }
+      if (l && (l.kind === "container" || l.kind === "child")) {
+        const c = byName.get(l.name);
+        return c ? containerStatus(c) : undefined;
+      }
+      return undefined;
+    },
   };
 }
 

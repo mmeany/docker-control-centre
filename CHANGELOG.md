@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## Unreleased
+
+- **Status colours:** containers, compose projects, images, volumes and
+  networks are coloured by state everywhere (tree, lists, tiles, tabs,
+  details pane), each state with its own mark: running / in use, starting,
+  paused, restarting, partly running, problem (non-zero exit, dead,
+  unhealthy), idle, stopped / unused, orphaned, down. Tooltips say why.
+- Projects roll up their containers' states; section nodes count problems
+  and orphans; Images, Volumes and Networks group orphans in the tree.
+- Prune offers "Orphaned only" first.
+- Help menu: what the colours mean, and About.
+
+## 0.1.0 (2026-11-06)
 
 The first version: a Windows File Explorer–style app for a Docker engine.
 

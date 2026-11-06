@@ -7,12 +7,14 @@ import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
 import { CopyIcon, DeleteIcon, FolderIcon, NetworkIcon, PruneIcon, RefreshIcon } from "../../components/Icons";
-import { TreeNote, TreeRow } from "../../components/TreeRow";
 import { formatDate } from "../../format";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { useEngineList } from "../../state/engineList";
 import { LAST, NameList, PropsTable, runRemoval, UsedBy } from "../common";
-import { flatPaths, NAME_KEY, networkUsers, unusedNetworks } from "../rules";
+import { ResourceTree } from "../ResourceTree";
+import { flatPaths, NAME_KEY, networkUsers, orphanedNetworks, unusedNetworks } from "../rules";
+import { StatusMark } from "../../components/StatusMark";
+import { networkStatus } from "../../status/status";
 
 const SECTION = "networks";
 export const networksPaths = flatPaths((s) => NAME_KEY.test(s));
@@ -34,12 +36,13 @@ export function useNetworksSection(shell: Shell): SectionUi {
 
   const networks = useEngineList(engine, engine.changes.network, resourcesApi.listNetworks);
   const containers = shell.containers.items ?? [];
-  const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
 
   const byName = useMemo(() => new Map((networks.items ?? []).map((n) => [n.name, n])), [networks.items]);
+  const live = shell.liveProjects;
+  const statusOf = (n: NetworkItem) => networkStatus(n, containers, live);
   const current = path ? byName.get(path) : undefined;
   const targets: NetworkItem[] = selected.size ? [...selected].map((k) => byName.get(k)).filter((x): x is NetworkItem => !!x) : current ? [current] : [];
   const deletable = targets.filter((n) => !n.builtin);
@@ -76,10 +79,29 @@ export function useNetworksSection(shell: Shell): SectionUi {
     );
   }
 
-  function prune() {
-    const unused = unusedNetworks(networks.items ?? [], containers);
-    if (unused.length === 0) shell.showFlash("Nothing to prune: every network has containers or is Docker's own");
-    else void remove(unused, "Prune networks: delete these unused networks?");
+  async function prune() {
+    const all = networks.items ?? [];
+    const orphans = orphanedNetworks(all, containers, live);
+    const unused = unusedNetworks(all, containers, live);
+    if (unused.length === 0) {
+      shell.showFlash("Nothing to prune: every network has containers or is Docker's own");
+      return;
+    }
+    const scope = await shell.ask(
+      "Prune networks",
+      <p>
+        Pruning deletes networks no container is attached to; Docker's own networks are left alone. Orphaned networks (marked orange) were left by a compose
+        project that's gone. You'll see the list before anything goes.
+      </p>,
+      [
+        ...(orphans.length ? [{ label: `Orphaned only (${orphans.length})`, value: "orphans", primary: true }] : []),
+        { label: `All unused (${unused.length})`, value: "all", primary: !orphans.length },
+        { label: "Cancel", value: "cancel" },
+      ],
+      "cancel",
+    );
+    if (scope === "cancel") return;
+    await remove(scope === "orphans" ? orphans : unused, "Prune networks: delete these networks?");
   }
 
   const rows: Row[] = useMemo(
@@ -90,7 +112,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
           key: n.name,
           icon: <NetworkIcon />,
           isContainer: false,
-          dimmed: n.builtin,
+          status: statusOf(n),
           cells: {
             name: { text: n.builtin ? `${n.name} (Docker's own)` : n.name, sort: `${n.builtin ? LAST : ""}${n.name}` },
             driver: { text: n.driver, sort: n.driver },
@@ -101,7 +123,8 @@ export function useNetworksSection(shell: Shell): SectionUi {
           },
         };
       }),
-    [networks.items, containers],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [networks.items, containers, live],
   );
 
   function openMenu(key: string | null, x: number, y: number) {
@@ -113,7 +136,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
         menu.push({ label: "Open", bold: true, shortcut: "Enter", onClick: () => go(key) }, { label: "Open in new tab", onClick: () => shell.openInNewTab({ section: SECTION, path: key }) }, "separator");
       if (list.some((n) => !n.builtin)) menu.push({ label: "Delete…", shortcut: "Del", onClick: () => void remove(list) }, "separator");
       if (list.length === 1) menu.push({ label: "Copy ID", onClick: () => void copyText(list[0].id) }, "separator");
-    } else menu.push({ label: "Prune…", onClick: prune }, "separator");
+    } else menu.push({ label: "Prune…", onClick: () => void prune() }, "separator");
     menu.push({ label: "Refresh", shortcut: "F5", onClick: networks.refresh });
     shell.openMenu(x, y, menu);
   }
@@ -123,7 +146,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
       <CommandButton icon={<FolderIcon />} label="Open" title="Open the selected network (Enter)" disabled={selected.size !== 1} onClick={() => go([...selected][0])} />
       <CommandSeparator />
       <CommandButton icon={<DeleteIcon />} label="Delete" title="Delete the selected networks (Del)" disabled={deletable.length === 0} onClick={() => void remove(targets)} />
-      <CommandButton icon={<PruneIcon />} label="Prune…" title="Delete networks no container uses" onClick={prune} />
+      <CommandButton icon={<PruneIcon />} label="Prune…" title="Delete networks no container uses" onClick={() => void prune()} />
       <CommandButton icon={<CopyIcon />} label="Copy ID" title="Copy the network's ID" disabled={targets.length !== 1} onClick={() => void copyText(targets[0].id)} />
       <CommandSeparator />
       <CommandButton icon={<RefreshIcon />} label="Refresh" title="Refresh (F5)" onClick={networks.refresh} />
@@ -131,15 +154,18 @@ export function useNetworksSection(shell: Shell): SectionUi {
   ) : null;
 
   const tree = (
-    <TreeRow depth={1} label="Networks" icon={<NetworkIcon />} selected={active && !path} expanded={open} onClick={() => go("")} onToggle={() => setOpen((v) => !v)}>
-      {networks.items === null ? (
-        <TreeNote depth={2}>{engine.status === "connected" ? "Loading…" : "Not connected"}</TreeNote>
-      ) : (
-        networks.items.map((n) => (
-          <TreeRow key={n.id} depth={2} label={n.name} icon={<NetworkIcon />} selected={active && path === n.name} onClick={() => go(n.name)} onContextMenu={(x, y) => openMenu(n.name, x, y)} />
-        ))
-      )}
-    </TreeRow>
+    <ResourceTree
+      label="Networks"
+      icon={<NetworkIcon />}
+      items={networks.items && networks.items.map((n) => ({ key: n.name, label: n.name, status: statusOf(n) }))}
+      note={engine.status === "connected" ? "Loading…" : "Not connected"}
+      emptyText="No networks"
+      selected={active ? path : null}
+      rootSelected={active && !path}
+      onRoot={() => go("")}
+      onOpen={go}
+      onMenu={openMenu}
+    />
   );
 
   let content: ReactNode = null;
@@ -183,6 +209,9 @@ export function useNetworksSection(shell: Shell): SectionUi {
         </span>
         <div>
           <div className="details-title">{paneItem.name}</div>
+          <div className="details-sub">
+            <StatusMark status={statusOf(paneItem)} /> {statusOf(paneItem).reason}
+          </div>
           <div className="details-sub">{paneItem.builtin ? "Docker's own network" : `${paneItem.driver} network`}</div>
         </div>
       </div>
@@ -200,6 +229,11 @@ export function useNetworksSection(shell: Shell): SectionUi {
     dialogs: null,
     details,
     onDelete: deletable.length ? () => void remove(targets) : undefined,
+    attention: { errors: 0, orphans: orphanedNetworks(networks.items ?? [], containers, live).length },
+    placeStatus: (p: string) => {
+      const n = byName.get(p);
+      return n ? statusOf(n) : undefined;
+    },
   };
 }
 

@@ -3,6 +3,7 @@
 // exactly those items are removed.
 import type { ContainerItem } from "../api/engine";
 import type { ImageItem, NetworkItem, VolumeItem } from "../api/resources";
+import { imageStatus, networkStatus, volumeStatus, type StatusState } from "../status/status";
 
 export const shortId = (id: string) => id.replace(/^sha256:/, "").slice(0, 12);
 
@@ -16,20 +17,26 @@ export const imageName = (i: ImageItem) => i.tags[0] ?? `<none> (${shortId(i.id)
 /** References that remove an image: each tag, or the id when it has none. */
 export const imageRefs = (i: ImageItem) => (i.tags.length ? i.tags : [i.id]);
 
-export function unusedImages(images: ImageItem[], containers: ContainerItem[], danglingOnly: boolean): ImageItem[] {
-  const used = new Set(containers.map((c) => c.imageId));
-  return images.filter((i) => !used.has(i.id) && (!danglingOnly || i.tags.length === 0));
-}
+// Prune candidates come from the status model, so the orange marks and what
+// "Orphaned only" removes can't disagree.
+const gone = (st: StatusState) => st === "unused" || st === "orphaned";
 
-export function unusedVolumes(volumes: VolumeItem[], containers: ContainerItem[], anonymousOnly: boolean): VolumeItem[] {
-  const used = new Set(containers.flatMap((c) => c.volumes));
-  return volumes.filter((v) => !used.has(v.name) && (!anonymousOnly || v.anonymous));
-}
+/** Nothing uses them (prune "All unused"). */
+export const unusedImages = (images: ImageItem[], containers: ContainerItem[]) => images.filter((i) => gone(imageStatus(i, containers).state));
+/** Untagged and unused (prune "Orphaned only"). */
+export const orphanedImages = (images: ImageItem[], containers: ContainerItem[]) => images.filter((i) => imageStatus(i, containers).state === "orphaned");
 
-export function unusedNetworks(networks: NetworkItem[], containers: ContainerItem[]): NetworkItem[] {
-  const used = new Set(containers.flatMap((c) => c.networks));
-  return networks.filter((n) => !n.builtin && !used.has(n.name));
-}
+export const unusedVolumes = (volumes: VolumeItem[], containers: ContainerItem[], live: Set<string>) =>
+  volumes.filter((v) => gone(volumeStatus(v, containers, live).state));
+/** Anonymous, or left by a compose project that's gone. */
+export const orphanedVolumes = (volumes: VolumeItem[], containers: ContainerItem[], live: Set<string>) =>
+  volumes.filter((v) => volumeStatus(v, containers, live).state === "orphaned");
+
+/** Never Docker's own networks. */
+export const unusedNetworks = (networks: NetworkItem[], containers: ContainerItem[], live: Set<string>) =>
+  networks.filter((n) => !n.builtin && gone(networkStatus(n, containers, live).state));
+export const orphanedNetworks = (networks: NetworkItem[], containers: ContainerItem[], live: Set<string>) =>
+  networks.filter((n) => networkStatus(n, containers, live).state === "orphaned");
 
 export const totalSize = (images: ImageItem[]) => images.reduce((t, i) => t + i.size, 0);
 

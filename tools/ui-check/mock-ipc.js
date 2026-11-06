@@ -24,6 +24,7 @@
   const volumes = [
     { name: "shop_pgdata", driver: "local", mountpoint: "/var/lib/docker/volumes/shop_pgdata/_data", created: iso(300), scope: "local", anonymous: false, project: "shop", labels: [{ key: "com.docker.compose.project", value: "shop" }], options: [] },
     { name: "monitoring_prom", driver: "local", mountpoint: "/var/lib/docker/volumes/monitoring_prom/_data", created: iso(900), scope: "local", anonymous: false, project: "monitoring", labels: [], options: [] },
+    { name: "legacy_db", driver: "local", mountpoint: "/var/lib/docker/volumes/legacy_db/_data", created: iso(4000), scope: "local", anonymous: false, project: "legacy", labels: [{ key: "com.docker.compose.project", value: "legacy" }], options: [] },
     { name: "old_cache", driver: "local", mountpoint: "/var/lib/docker/volumes/old_cache/_data", created: iso(2000), scope: "local", anonymous: false, project: null, labels: [], options: [] },
     { name: hex(5), driver: "local", mountpoint: "/var/lib/docker/volumes/x/_data", created: iso(500), scope: "local", anonymous: true, project: null, labels: [], options: [] },
   ];
@@ -35,6 +36,7 @@
     network("shop_default", "172.18.0.0/16", { project: "shop" }),
     network("monitoring_default", "172.19.0.0/16", { project: "monitoring" }),
     network("old_default", "172.20.0.0/16"),
+    network("legacy_default", "172.21.0.0/16", { project: "legacy" }),
   ];
   const container = (name, image, state, status, opts = {}) => ({
     id: (++n).toString(16).padStart(4, "0").repeat(16),
@@ -49,6 +51,8 @@
     workingDir: opts.project ? `/home/mark/projects/${opts.project}` : null,
     configFiles: opts.project ? [`/home/mark/projects/${opts.project}/compose.yml`] : [],
     imageId: imageIdOf(image),
+    exitCode: /^Exited \((\d+)\)/.test(status) ? Number(/^Exited \((\d+)\)/.exec(status)[1]) : null,
+    health: opts.health ?? "",
     volumes: opts.volumes ?? [],
     networks: opts.project ? [`${opts.project}_default`] : ["bridge"],
   });
@@ -58,7 +62,8 @@
     container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker" }),
     container("monitoring-prometheus-1", "prom/prometheus:v3.1.0", "running", "Up 2 days", { project: "monitoring", service: "prometheus", ports: ["9090→9090/tcp"], age: 60, volumes: ["monitoring_prom"] }),
     container("monitoring-grafana-1", "grafana/grafana:11.4.0", "paused", "Up 2 days (Paused)", { project: "monitoring", service: "grafana", ports: ["3001→3000/tcp"], age: 60 }),
-    container("postgres", "postgres:17", "running", "Up 5 days", { ports: ["5432→5432/tcp"], age: 130 }),
+    container("postgres", "postgres:17", "running", "Up 5 days (healthy)", { ports: ["5432→5432/tcp"], age: 130, health: "healthy" }),
+    container("api-canary", "shop-api:latest", "running", "Up 2 hours (unhealthy)", { ports: ["3100→3000/tcp"], age: 3, health: "unhealthy" }),
     container("redis-scratch", "redis:7.4", "exited", "Exited (137) 3 days ago", { age: 80 }),
   ];
 
@@ -157,9 +162,9 @@
         const c = containers[i];
         const t = a.action.type;
         if (t === "remove") containers.splice(i, 1);
-        else if (t === "start" || t === "restart" || t === "unpause") Object.assign(c, { state: "running", status: "Up 1 second" });
+        else if (t === "start" || t === "restart" || t === "unpause") Object.assign(c, { state: "running", status: "Up 1 second", exitCode: null, health: "" });
         else if (t === "pause") Object.assign(c, { state: "paused", status: "Up 3 hours (Paused)" });
-        else Object.assign(c, { state: "exited", status: `Exited (${t === "kill" ? 137 : 0}) 1 second ago` });
+        else Object.assign(c, { state: "exited", status: `Exited (${t === "kill" ? 137 : 0}) 1 second ago`, exitCode: t === "kill" ? 137 : 0, health: "" });
         return { id, error: null };
       });
       setTimeout(() => window.__engine({ type: "changed", resource: "container", action: a.action.type, id: a.ids[0] }), 10);
@@ -359,6 +364,7 @@
     invoke: async (cmd, args = {}) => {
       // Events and window APIs used by the shell (theme): accept quietly.
       if (cmd.startsWith("plugin:event|")) return cmd.endsWith("listen") ? args.handler : null;
+      if (cmd === "plugin:app|version") return "0.1.0";
       if (cmd.startsWith("plugin:window|")) return cmd.endsWith("theme") ? (settings.theme === "light" ? "light" : "dark") : null;
       window.__calls.push([cmd, args]);
       const h = window.__mock[cmd] || handlers[cmd];

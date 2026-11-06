@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import type { ContainerDetails, ContainerItem, KeyValue } from "../../api/engine";
 import { MaskedValue } from "../../components/MaskedValue";
 import { ContainerIcon, ProjectIcon } from "../../components/Icons";
+import { StatusMark } from "../../components/StatusMark";
+import { containerStatus, projectStatus } from "../../status/status";
 import { formatDate } from "../../format";
 import type { ChildId } from "./paths";
 
@@ -114,14 +116,18 @@ function Props({ rows }: { rows: [string, ReactNode][] }) {
 export function ContainerPane({ item, details }: { item: ContainerItem; details: ContainerDetails | null }) {
   const d = details?.id === item.id ? details : null;
   const exit = d && d.state === "exited" && d.exitCode !== null ? `Exit code ${d.exitCode}` : "";
+  const st = containerStatus(item);
   return (
     <>
       <div className="details-head">
         <span className="fl-icon">
-          <ContainerIcon state={item.state} />
+          <ContainerIcon />
         </span>
         <div>
-          <div className="details-title">{item.name}</div>
+          <div className={`details-title st-${st.state}`}>{item.name}</div>
+          <div className="details-sub">
+            <StatusMark status={st} /> {st.reason}
+          </div>
           <div className="details-sub">{item.status}</div>
         </div>
       </div>
@@ -144,8 +150,9 @@ export function ContainerPane({ item, details }: { item: ContainerItem; details:
   );
 }
 
-export function ProjectPane({ name, containers }: { name: string; containers: ContainerItem[] }) {
+export function ProjectPane({ name, containers, pinned = false }: { name: string; containers: ContainerItem[]; pinned?: boolean }) {
   const by = (s: string) => containers.filter((c) => c.state === s).length;
+  const st = projectStatus(containers, pinned);
   const dir = containers.find((c) => c.workingDir)?.workingDir ?? "";
   return (
     <>
@@ -154,8 +161,10 @@ export function ProjectPane({ name, containers }: { name: string; containers: Co
           <ProjectIcon />
         </span>
         <div>
-          <div className="details-title">{name}</div>
-          <div className="details-sub">Compose project</div>
+          <div className={`details-title st-${st.state}`}>{name}</div>
+          <div className="details-sub">
+            <StatusMark status={st} /> {st.reason}
+          </div>
         </div>
       </div>
       <Props

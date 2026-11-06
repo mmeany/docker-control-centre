@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import type { Status } from "../status/status";
+import { StatusMark, statusTip } from "./StatusMark";
 
 /** Explorer's views: details (columns), list (names flowing in columns), tiles. */
 export type ViewMode = "details" | "list" | "tiles";
@@ -17,6 +19,8 @@ export interface Row {
   isContainer: boolean;
   /** Shown faded (e.g. cut to the clipboard). */
   dimmed?: boolean;
+  /** Colours the name and adds the state mark; its reason is the tooltip. */
+  status?: Status;
   cells: Record<string, { text: string; sort: string | number }>;
 }
 
@@ -174,18 +178,21 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
               key={r.key}
               data-key={r.key}
               className={`fl-item ${selected.has(r.key) ? "selected" : ""} ${r.dimmed ? "dimmed" : ""}`}
-              title={r.cells[columns[0].id]?.text}
+              title={`${r.cells[columns[0].id]?.text ?? ""}${r.status ? ` · ${statusTip(r.status)}` : ""}`}
               onClick={(e) => clickRow(e, r.key)}
               onDoubleClick={() => onOpen(r.key)}
             >
+              {r.status && <StatusMark status={r.status} />}
               <span className="fl-icon">{r.icon}</span>
               {view === "list" ? (
-                <span className="fl-item-name">{r.cells[columns[0].id]?.text ?? ""}</span>
+                <span className={`fl-item-name fl-name ${r.status ? `st-${r.status.state}` : ""}`}>{r.cells[columns[0].id]?.text ?? ""}</span>
               ) : (
                 <span className="fl-tile-text">
-                  <span className="fl-item-name">{r.cells[columns[0].id]?.text ?? ""}</span>
+                  <span className={`fl-item-name fl-name ${r.status ? `st-${r.status.state}` : ""}`}>{r.cells[columns[0].id]?.text ?? ""}</span>
+                  {/* Tiles hold three lines: with a status, it takes the second. */}
+                  {r.status && <span className={`fl-tile-sub st-${r.status.state}`}>{r.status.label}</span>}
                   {second && <span className="fl-tile-sub">{r.cells[second]?.text ?? ""}</span>}
-                  {third && <span className="fl-tile-sub">{r.cells[third]?.text ?? ""}</span>}
+                  {third && !r.status && <span className="fl-tile-sub">{r.cells[third]?.text ?? ""}</span>}
                 </span>
               )}
             </div>
@@ -230,15 +237,23 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
             data-key={r.key}
             className={`fl-row ${selected.has(r.key) ? "selected" : ""} ${r.dimmed ? "dimmed" : ""}`}
             style={{ gridTemplateColumns: template, position: "absolute", top: (first + i) * ROW_H, left: 0, right: 0 }}
+            title={r.status ? statusTip(r.status) : undefined}
             onClick={(e) => clickRow(e, r.key)}
             onDoubleClick={() => onOpen(r.key)}
           >
-            {columns.map((c, i) => (
-              <span key={c.id} className={`fl-cell ${c.align === "right" ? "right" : ""}`}>
-                {i === 0 && <span className="fl-icon">{r.icon}</span>}
-                {r.cells[c.id]?.text ?? ""}
-              </span>
-            ))}
+            {columns.map((c, i) =>
+              i === 0 ? (
+                <span key={c.id} className="fl-cell">
+                  {r.status && <StatusMark status={r.status} />}
+                  <span className="fl-icon">{r.icon}</span>
+                  <span className={`fl-name ${r.status ? `st-${r.status.state}` : ""}`}>{r.cells[c.id]?.text ?? ""}</span>
+                </span>
+              ) : (
+                <span key={c.id} className={`fl-cell ${c.align === "right" ? "right" : ""}`}>
+                  {r.cells[c.id]?.text ?? ""}
+                </span>
+              ),
+            )}
           </div>
         ))}
         </div>

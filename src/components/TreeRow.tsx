@@ -1,4 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
+import type { Status } from "../status/status";
+import { StatusMark, statusTip } from "./StatusMark";
 
 export const TREE_INDENT = 16;
 
@@ -13,6 +15,10 @@ interface Props {
   /** data-* attributes (e.g. drop targets). */
   data?: Record<string, string>;
   muted?: boolean;
+  /** Colours the label and adds the state mark; its reason is the tooltip. */
+  status?: Status;
+  /** After the label (section badges). */
+  badge?: ReactNode;
   onClick?: () => void;
   onToggle?: () => void;
   onContextMenu?: (x: number, y: number) => void;
@@ -20,7 +26,7 @@ interface Props {
 }
 
 /** One row of the folder tree (any service), plus its children when expanded. */
-export function TreeRow({ depth, label, icon, selected, expanded, title, data, muted, onClick, onToggle, onContextMenu, children }: Props) {
+export function TreeRow({ depth, label, icon, selected, expanded, title, data, muted, status, badge, onClick, onToggle, onContextMenu, children }: Props) {
   const dataAttrs = Object.fromEntries(Object.entries(data ?? {}).map(([k, v]) => [`data-${k}`, v]));
   return (
     <div role="none">
@@ -30,7 +36,7 @@ export function TreeRow({ depth, label, icon, selected, expanded, title, data, m
         role="treeitem"
         aria-expanded={expanded}
         aria-selected={selected}
-        title={title}
+        title={status ? `${title ? `${title} · ` : ""}${statusTip(status)}` : title}
         {...dataAttrs}
         onClick={onClick}
         onDoubleClick={() => expanded !== undefined && onToggle?.()}
@@ -49,8 +55,10 @@ export function TreeRow({ depth, label, icon, selected, expanded, title, data, m
         >
           {expanded === undefined ? "" : expanded ? "▾" : "▸"}
         </span>
+        {status && <StatusMark status={status} />}
         {icon}
-        <span className="tree-label">{label}</span>
+        <span className={`tree-label ${status ? `st-${status.state}` : ""}`}>{label}</span>
+        {badge}
       </div>
       {expanded && children && <div role="group">{children}</div>}
     </div>

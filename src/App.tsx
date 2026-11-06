@@ -18,12 +18,18 @@ import { SECTIONS } from "./sections";
 import { HOME, parentPlace, parseAddress, placeCrumbs, placeUri, rootOf, samePlace, sectionOf, type Place } from "./shell/places";
 import type { SectionUi, Shell } from "./shell/shell";
 import { streamsApi } from "./api/streams";
+import { composeApi, type Pinned } from "./api/compose";
 import { engineApi } from "./api/engine";
+import { liveProjects } from "./status/status";
+import { StatusMark, statusTip } from "./components/StatusMark";
+import { attentionText } from "./components/SectionBadge";
 import { useEngine } from "./state/engine";
 import { useEngineList } from "./state/engineList";
 import { DETAILS_PANE_KEY, readSession, readViews, SESSION_KEY, VIEWS_KEY, withView, type SavedSession } from "./state/session";
 import { useTabs } from "./state/tabs";
 import { SettingsDialog } from "./settings/SettingsDialog";
+import { LegendDialog } from "./status/LegendDialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { useTheme } from "./state/theme";
 
 /** Shown in the toolbar; the window title comes from tauri.conf.json. */
@@ -73,6 +79,7 @@ function loadTreeWidth(): number {
 
 const HOME_COLUMNS: Column[] = [
   { id: "name", label: "Name", width: 220 },
+  { id: "attention", label: "Needs attention", width: 200 },
   { id: "desc", label: "Description", width: 460 },
 ];
 
@@ -89,10 +96,19 @@ export default function App() {
   const flashTimer = useRef<number | undefined>(undefined);
   const [editAddress, setEditAddress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   const nav = useTabs<Place>(POPOUT_PLACE ?? HOME, samePlace);
   const place = nav.current;
   const engine = useEngine();
   const containers = useEngineList(engine, engine.changes.container, engineApi.listContainers);
+  const [composePinned, setComposePinned] = useState<Pinned[]>([]);
+  useEffect(() => {
+    composeApi
+      .pinned()
+      .then(setComposePinned)
+      .catch(() => {});
+  }, []);
+  const live = useMemo(() => liveProjects(containers.items ?? [], composePinned.map((p) => p.name)), [containers.items, composePinned]);
   const homeLabel = engine.info?.name ?? "Docker";
   const treeRef = useRef<HTMLDivElement>(null);
 
@@ -215,6 +231,9 @@ export default function App() {
         },
     engine,
     containers,
+    composePinned,
+    setComposePinned,
+    liveProjects: live,
     view,
     ask,
     askName,
@@ -334,16 +353,21 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // Layout
 
-  const homeRows: Row[] = useMemo(
-    () =>
-      SECTIONS.map((s) => ({
-        key: s.id,
-        icon: s.icon,
-        isContainer: true,
-        cells: { name: { text: s.name, sort: s.name }, desc: { text: s.description, sort: s.description } },
-      })),
-    [],
-  );
+  const homeRows: Row[] = SECTIONS.map((s) => {
+    const a = sectionUis[s.id].attention ?? { errors: 0, orphans: 0 };
+    const text = attentionText(a);
+    return {
+      key: s.id,
+      icon: s.icon,
+      isContainer: true,
+      status: a.errors
+        ? { state: "error" as const, label: "Problem", reason: text }
+        : a.orphans
+          ? { state: "orphaned" as const, label: "Orphaned", reason: text }
+          : undefined,
+      cells: { name: { text: s.name, sort: s.name }, attention: { text, sort: a.errors * 1000 + a.orphans }, desc: { text: s.description, sort: s.description } },
+    };
+  });
 
   const content: ReactNode = active ? (
     active.content
@@ -370,8 +394,40 @@ export default function App() {
   const tabInfos: TabInfo[] = nav.tabs.map((t) => {
     const p = t.stack[t.index];
     const crumbs = placeCrumbs(p);
-    return { id: t.id, title: crumbs.length ? crumbs[crumbs.length - 1].label : homeLabel, icon: sectionOf(p)?.icon ?? <ServerIcon /> };
+    const st = p.section ? sectionUis[p.section]?.placeStatus?.(p.path) : undefined;
+    const title = crumbs.length ? crumbs[crumbs.length - 1].label : homeLabel;
+    return {
+      id: t.id,
+      title: st ? `${title} · ${statusTip(st)}` : title,
+      label: title,
+      icon: (
+        <>
+          {st && <StatusMark status={st} />}
+          {sectionOf(p)?.icon ?? <ServerIcon />}
+        </>
+      ),
+    };
   });
+
+  async function showAbout() {
+    let version = "development build";
+    try {
+      version = `version ${await getVersion()}`;
+    } catch {
+      /* not running in Tauri */
+    }
+    await ask(
+      "About Docker Control Centre",
+      <>
+        <p>
+          Docker Control Centre, {version}. Manage a Docker engine the way File Explorer manages files.
+        </p>
+        <p className="hint">MIT or Apache-2.0. Connected to {engine.info?.endpoint ?? "no engine"}.</p>
+      </>,
+      [{ label: "OK", value: "ok", primary: true }],
+      "ok",
+    );
+  }
 
   function submitAddress(text: string): boolean {
     const p = parseAddress(text);
@@ -390,6 +446,7 @@ export default function App() {
 
   const overlays = (
     <>
+      {legendOpen && <LegendDialog onClose={() => setLegendOpen(false)} />}
       {settingsOpen && settings && (
         <SettingsDialog
           settings={settings}
@@ -476,6 +533,17 @@ export default function App() {
         theme={themePref}
         onThemeChange={(t) => void changeTheme(t)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHelp={(x, y) =>
+          setMenu({
+            x,
+            y,
+            items: [
+              { label: "What the colours mean…", onClick: () => setLegendOpen(true) },
+              "separator",
+              { label: "About Docker Control Centre", onClick: () => void showAbout() },
+            ],
+          })
+        }
         place={place}
         canBack={nav.canBack}
         canForward={nav.canForward}

@@ -187,6 +187,10 @@ pub struct ContainerItem {
     pub state: String,
     /// Human status from the engine ("Up 3 hours", "Exited (0) 2 days ago").
     pub status: String,
+    /// From "Exited (137) …"; None while running or never run.
+    pub exit_code: Option<i64>,
+    /// Health check: "starting", "healthy", "unhealthy", or "" without one.
+    pub health: String,
     /// ISO 8601 UTC.
     pub created: String,
     /// "8080→80/tcp", "5432/tcp".
@@ -232,7 +236,14 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         .map(|n| n.into_keys().collect())
         .unwrap_or_default();
     networks.sort();
+    let status = c.status.unwrap_or_default();
+    let health = health_of(
+        c.health.and_then(|h| h.status).map(|s| s.to_string()),
+        &status,
+    );
     ContainerItem {
+        exit_code: exit_code_of(&status),
+        health,
         id: c.id.unwrap_or_default(),
         name,
         image: c.image.unwrap_or_default(),
@@ -240,7 +251,7 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         volumes,
         networks,
         state: c.state.map(|s| s.to_string()).unwrap_or_default(),
-        status: c.status.unwrap_or_default(),
+        status,
         created,
         ports: format_ports(c.ports.unwrap_or_default()),
         project: label(LABEL_PROJECT),
@@ -255,6 +266,26 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
             })
             .unwrap_or_default(),
     }
+}
+
+/// The code in "Exited (137) 2 hours ago".
+pub fn exit_code_of(status: &str) -> Option<i64> {
+    let rest = status.strip_prefix("Exited (")?;
+    rest.split(')').next()?.trim().parse().ok()
+}
+
+/// Health from the engine's health field, else from "(healthy)" in the status line.
+fn health_of(health: Option<String>, status: &str) -> String {
+    let h = health.unwrap_or_default();
+    if matches!(h.as_str(), "starting" | "healthy" | "unhealthy") {
+        return h;
+    }
+    for s in ["unhealthy", "health: starting", "healthy"] {
+        if status.contains(&format!("({s})")) {
+            return s.trim_start_matches("health: ").to_string();
+        }
+    }
+    String::new()
 }
 
 pub fn short_id(id: &str) -> &str {
@@ -436,6 +467,22 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn reads_exit_codes_and_health() {
+        assert_eq!(exit_code_of("Exited (137) 6 weeks ago"), Some(137));
+        assert_eq!(exit_code_of("Exited (0) 2 days ago"), Some(0));
+        assert_eq!(exit_code_of("Up 5 days"), None);
+        assert_eq!(exit_code_of("Created"), None);
+        assert_eq!(health_of(None, "Up 3 hours (unhealthy)"), "unhealthy");
+        assert_eq!(
+            health_of(None, "Up 3 seconds (health: starting)"),
+            "starting"
+        );
+        assert_eq!(health_of(None, "Up 3 hours (healthy)"), "healthy");
+        assert_eq!(health_of(Some("healthy".into()), "Up"), "healthy");
+        assert_eq!(health_of(Some("none".into()), "Up 3 hours"), "");
     }
 
     #[test]

@@ -33,6 +33,13 @@ Rust.
 - **Networks:** subnets, attached containers, delete and prune; Docker's own
   networks are left alone.
 
+Everything is colour-coded by state, with a distinct mark per state so it
+doesn't rely on colour alone: green running or in use, amber starting,
+paused or partly running, red for a crash or failing health check, blue idle
+(only stopped containers use it), grey stopped or unused, orange orphaned
+(safe to prune). The tree counts problems and orphans per section, and
+**Help › What the colours mean** explains each one.
+
 Lists update live from the engine's events. Tabs, the view for each place,
 the details pane and the window's size and position come back next time.
 
@@ -40,8 +47,8 @@ the details pane and the window's size and position come back next time.
 |---|---|
 | ![A compose project's logs, merged](docs/screenshots/compose-logs.png) | ![Live stats](docs/screenshots/stats.png) |
 | Every service's logs, merged | Live stats |
-| ![Pulling an image](docs/screenshots/pull.png) | |
-| Pulling an image | |
+| ![Pulling an image](docs/screenshots/pull.png) | ![Status colours](docs/screenshots/status.png) |
+| Pulling an image | Status colours: crashed, unhealthy, partly running |
 
 ## Install
 

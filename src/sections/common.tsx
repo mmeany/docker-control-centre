@@ -2,6 +2,8 @@
 import type { ReactNode } from "react";
 import type { ActionResult, ContainerItem } from "../api/engine";
 import { ContainerIcon } from "../components/Icons";
+import { StatusMark, statusTip } from "../components/StatusMark";
+import { containerStatus } from "../status/status";
 import type { Shell } from "../shell/shell";
 import { containerPath } from "./containers/paths";
 
@@ -53,23 +55,27 @@ export function UsedBy({ containers, shell, what }: { containers: ContainerItem[
           </tr>
         </thead>
         <tbody>
-          {containers.map((c) => (
+          {containers.map((c) => {
+            const st = containerStatus(c);
+            return (
             <tr
               key={c.id}
               className="link-row"
-              title="Double-click to open"
+              title={`${statusTip(st)} Double-click to open.`}
               onDoubleClick={() => shell.navigate({ section: "containers", path: containerPath(c.project, c.name) })}
             >
               <td>
+                <StatusMark status={st} />{" "}
                 <span className="fl-icon">
-                  <ContainerIcon state={c.state} />
+                  <ContainerIcon />
                 </span>{" "}
-                {c.name}
+                <span className={`fl-name st-${st.state}`}>{c.name}</span>
               </td>
-              <td>{c.state}</td>
+              <td className={`st-${st.state}`}>{st.label}</td>
               <td>{c.image}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

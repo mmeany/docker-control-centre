@@ -7,12 +7,14 @@ import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
 import { CopyIcon, DeleteIcon, DownloadIcon, FolderIcon, ImageIcon, PruneIcon, RefreshIcon } from "../../components/Icons";
-import { TreeNote, TreeRow } from "../../components/TreeRow";
 import { formatDate, formatSize } from "../../format";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { useEngineList } from "../../state/engineList";
 import { LAST, NameList, PropsTable, runRemoval, UsedBy } from "../common";
-import { flatPaths, IMAGE_KEY, imageName, imageRefs, imageUsers, shortId, totalSize, unusedImages } from "../rules";
+import { ResourceTree } from "../ResourceTree";
+import { flatPaths, IMAGE_KEY, imageName, imageRefs, imageUsers, orphanedImages, shortId, totalSize, unusedImages } from "../rules";
+import { StatusMark } from "../../components/StatusMark";
+import { imageStatus } from "../../status/status";
 import { PullDialog } from "./PullDialog";
 
 const SECTION = "images";
@@ -37,7 +39,6 @@ export function useImagesSection(shell: Shell): SectionUi {
 
   const images = useEngineList(engine, engine.changes.image, resourcesApi.listImages);
   const containers = shell.containers.items ?? [];
-  const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
@@ -114,8 +115,8 @@ export function useImagesSection(shell: Shell): SectionUi {
 
   async function prune() {
     const all = images.items ?? [];
-    const dangling = unusedImages(all, containers, true);
-    const unused = unusedImages(all, containers, false);
+    const dangling = orphanedImages(all, containers);
+    const unused = unusedImages(all, containers);
     if (unused.length === 0) {
       shell.showFlash("Nothing to prune: every image is used by a container");
       return;
@@ -123,10 +124,13 @@ export function useImagesSection(shell: Shell): SectionUi {
     const scope = await shell.ask(
       "Prune images",
       <>
-        <p>Pruning deletes images no container uses, including stopped ones. Choose what to include; you'll see the list before anything goes.</p>
+        <p>
+          Pruning deletes images no container uses, including stopped ones. Orphaned images (untagged, marked orange) are the safe choice. You'll see the list
+          before anything goes.
+        </p>
       </>,
       [
-        ...(dangling.length ? [{ label: `Untagged only (${dangling.length}, ${formatSize(totalSize(dangling))})`, value: "dangling", primary: true }] : []),
+        ...(dangling.length ? [{ label: `Orphaned only (${dangling.length}, ${formatSize(totalSize(dangling))})`, value: "dangling", primary: true }] : []),
         { label: `All unused (${unused.length}, ${formatSize(totalSize(unused))})`, value: "unused", primary: !dangling.length },
         { label: "Cancel", value: "cancel" },
       ],
@@ -170,7 +174,7 @@ export function useImagesSection(shell: Shell): SectionUi {
           key: shortId(i.id),
           icon: <ImageIcon />,
           isContainer: false,
-          dimmed: i.tags.length === 0,
+          status: imageStatus(i, containers),
           cells: {
             name: { text: imageName(i), sort: i.tags.length ? imageName(i).toLowerCase() : `${LAST}${i.id}` },
             id: { text: shortId(i.id), sort: i.id },
@@ -220,27 +224,18 @@ export function useImagesSection(shell: Shell): SectionUi {
   // Tree, content, details
 
   const tree = (
-    <TreeRow depth={1} label="Images" icon={<ImageIcon />} selected={active && !path} expanded={open} onClick={() => go("")} onToggle={() => setOpen((v) => !v)}>
-      {images.items === null ? (
-        <TreeNote depth={2}>{engine.status === "connected" ? "Loading…" : "Not connected"}</TreeNote>
-      ) : images.items.length === 0 ? (
-        <TreeNote depth={2}>No images</TreeNote>
-      ) : (
-        images.items
-          .filter((i) => i.tags.length)
-          .map((i) => (
-            <TreeRow
-              key={i.id}
-              depth={2}
-              label={imageName(i)}
-              icon={<ImageIcon />}
-              selected={active && path === shortId(i.id)}
-              onClick={() => go(shortId(i.id))}
-              onContextMenu={(x, y) => openMenu(shortId(i.id), x, y)}
-            />
-          ))
-      )}
-    </TreeRow>
+    <ResourceTree
+      label="Images"
+      icon={<ImageIcon />}
+      items={images.items && images.items.map((i) => ({ key: shortId(i.id), label: imageName(i), status: imageStatus(i, containers) }))}
+      note={engine.status === "connected" ? "Loading…" : "Not connected"}
+      emptyText="No images"
+      selected={active ? path : null}
+      rootSelected={active && !path}
+      onRoot={() => go("")}
+      onOpen={go}
+      onMenu={openMenu}
+    />
   );
 
   const loaded = details?.data && inspectTarget && details.id === inspectTarget.id ? details.data : null;
@@ -286,6 +281,9 @@ export function useImagesSection(shell: Shell): SectionUi {
         </span>
         <div>
           <div className="details-title">{imageName(inspectTarget)}</div>
+          <div className="details-sub">
+            <StatusMark status={imageStatus(inspectTarget, containers)} /> {imageStatus(inspectTarget, containers).reason}
+          </div>
           <div className="details-sub">{formatSize(inspectTarget.size)}</div>
         </div>
       </div>
@@ -325,6 +323,11 @@ export function useImagesSection(shell: Shell): SectionUi {
     dialogs,
     details: pane,
     onDelete: targets.length ? () => void remove(targets) : undefined,
+    attention: { errors: 0, orphans: orphanedImages(images.items ?? [], containers).length },
+    placeStatus: (p: string) => {
+      const i = byKey.get(p);
+      return i ? imageStatus(i, containers) : undefined;
+    },
   };
 }
 

@@ -5,7 +5,7 @@
 // every service's logs in time order.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
-import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb, type Pinned } from "../../api/compose";
+import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb } from "../../api/compose";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -18,6 +18,9 @@ import { containerPath } from "../containers/paths";
 import { LogsView } from "../containers/LogsView";
 import { projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
 import { RunDialog } from "./RunDialog";
+import { attention, containerStatus, projectStatus } from "../../status/status";
+import { SectionBadge } from "../../components/SectionBadge";
+import { StatusMark } from "../../components/StatusMark";
 
 const SECTION = "compose";
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
@@ -69,7 +72,9 @@ export function useComposeSection(shell: Shell): SectionUi {
   const [projectName, child] = path.split("/");
   const go = useCallback((p: string) => shell.navigate({ section: SECTION, path: p }), [shell]);
 
-  const [pinned, setPinned] = useState<Pinned[]>([]);
+  // Pinned files live in the shell: volumes and networks need them too.
+  const pinned = shell.composePinned;
+  const setPinned = shell.setComposePinned;
   const [distro, setDistro] = useState("");
   const [open, setOpen] = useState(true);
   const [running, setRunning] = useState<{ project: Project; verb: ComposeVerb } | null>(null);
@@ -95,6 +100,8 @@ export function useComposeSection(shell: Shell): SectionUi {
 
   const projects = useMemo(() => projectsFrom(shell.containers.items ?? [], pinned), [shell.containers.items, pinned]);
   const byName = useMemo(() => new Map(projects.map((p) => [p.name, p])), [projects]);
+  const statusOf = (p: Project) => projectStatus(p.containers, p.pinned !== null);
+  const sectionAttention = useMemo(() => ({ ...attention(projects.map((p) => projectStatus(p.containers, p.pinned !== null))), orphans: 0 }), [projects]);
   const current = projectName ? byName.get(projectName) : undefined;
   const single = selected.size === 1 && !projectName ? byName.get([...selected][0]) : undefined;
   const target = single ?? current;
@@ -170,10 +177,10 @@ export function useComposeSection(shell: Shell): SectionUi {
     key: p.name,
     icon: <ProjectIcon />,
     isContainer: true,
-    dimmed: p.containers.length === 0,
+    status: statusOf(p),
     cells: {
       name: { text: p.name, sort: p.name },
-      state: { text: projectState(p), sort: p.containers.length ? p.running - p.containers.length : 1 },
+      state: { text: statusOf(p).label, sort: p.containers.length ? p.running - p.containers.length : 1 },
       services: { text: [...new Set(p.containers.map((c) => c.service ?? c.name))].join(", "), sort: p.containers.length },
       folder: { text: p.pinned ? p.pinned.file : shown(p.dir), sort: p.dir },
       source: { text: p.pinned && p.containers.length ? "Pinned, running" : p.pinned ? "Pinned" : "Running", sort: p.pinned ? 0 : 1 },
@@ -190,11 +197,12 @@ export function useComposeSection(shell: Shell): SectionUi {
         },
         ...current.containers.map((c) => ({
           key: `c:${c.name}`,
-          icon: <ContainerIcon state={c.state} />,
+          icon: <ContainerIcon />,
           isContainer: false,
+          status: containerStatus(c),
           cells: {
             name: { text: c.name, sort: c.name },
-            state: { text: c.state, sort: c.state },
+            state: { text: containerStatus(c).label, sort: c.state },
             service: { text: c.service ?? "", sort: c.service ?? "" },
             image: { text: c.image, sort: c.image },
             status: { text: c.status, sort: c.status },
@@ -254,7 +262,16 @@ export function useComposeSection(shell: Shell): SectionUi {
   // Tree, content, details
 
   const tree = (
-    <TreeRow depth={1} label="Compose" icon={<ProjectIcon />} selected={active && !projectName} expanded={open} onClick={() => go("")} onToggle={() => setOpen((v) => !v)}>
+    <TreeRow
+      depth={1}
+      label="Compose"
+      icon={<ProjectIcon />}
+      badge={<SectionBadge {...sectionAttention} />}
+      selected={active && !projectName}
+      expanded={open}
+      onClick={() => go("")}
+      onToggle={() => setOpen((v) => !v)}
+    >
       {shell.containers.items === null ? (
         <TreeNote depth={2}>{engine.status === "connected" ? "Loading…" : "Not connected"}</TreeNote>
       ) : projects.length === 0 ? (
@@ -266,8 +283,7 @@ export function useComposeSection(shell: Shell): SectionUi {
             depth={2}
             label={p.name}
             icon={<ProjectIcon />}
-            title={`${p.name}: ${projectState(p)}`}
-            muted={false}
+            status={statusOf(p)}
             selected={active && projectName === p.name}
             onClick={() => go(p.name)}
             onContextMenu={(x, y) => openMenu(p.name, x, y)}
@@ -341,7 +357,9 @@ export function useComposeSection(shell: Shell): SectionUi {
         </span>
         <div>
           <div className="details-title">{paneProject.name}</div>
-          <div className="details-sub">{projectState(paneProject)}</div>
+          <div className="details-sub">
+            <StatusMark status={statusOf(paneProject)} /> {statusOf(paneProject).reason}
+          </div>
         </div>
       </div>
       <PropsTable
@@ -369,5 +387,19 @@ export function useComposeSection(shell: Shell): SectionUi {
     />
   ) : null;
 
-  return { tree, content, commands, status, busy: active && shell.containers.loading, refresh, dialogs, details };
+  return {
+    tree,
+    content,
+    commands,
+    status,
+    busy: active && shell.containers.loading,
+    refresh,
+    dialogs,
+    details,
+    attention: sectionAttention,
+    placeStatus: (p: string) => {
+      const pr = byName.get(p.split("/")[0]);
+      return pr ? statusOf(pr) : undefined;
+    },
+  };
 }

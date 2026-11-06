@@ -7,12 +7,14 @@ import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
 import { CopyIcon, DeleteIcon, FolderIcon, PruneIcon, RefreshIcon, VolumeIcon } from "../../components/Icons";
-import { TreeNote, TreeRow } from "../../components/TreeRow";
 import { formatDate } from "../../format";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { useEngineList } from "../../state/engineList";
 import { LAST, NameList, PropsTable, runRemoval, UsedBy } from "../common";
-import { flatPaths, NAME_KEY, unusedVolumes, volumeUsers } from "../rules";
+import { ResourceTree } from "../ResourceTree";
+import { flatPaths, NAME_KEY, orphanedVolumes, unusedVolumes, volumeUsers } from "../rules";
+import { StatusMark } from "../../components/StatusMark";
+import { volumeStatus } from "../../status/status";
 
 const SECTION = "volumes";
 export const volumesPaths = flatPaths((s) => NAME_KEY.test(s));
@@ -36,12 +38,13 @@ export function useVolumesSection(shell: Shell): SectionUi {
 
   const volumes = useEngineList(engine, engine.changes.volume, resourcesApi.listVolumes);
   const containers = shell.containers.items ?? [];
-  const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
 
   const byName = useMemo(() => new Map((volumes.items ?? []).map((v) => [v.name, v])), [volumes.items]);
+  const live = shell.liveProjects;
+  const statusOf = (v: VolumeItem) => volumeStatus(v, containers, live);
   const current = path ? byName.get(path) : undefined;
   const targets: VolumeItem[] = selected.size ? [...selected].map((k) => byName.get(k)).filter((x): x is VolumeItem => !!x) : current ? [current] : [];
 
@@ -80,17 +83,20 @@ export function useVolumesSection(shell: Shell): SectionUi {
 
   async function prune() {
     const all = volumes.items ?? [];
-    const anon = unusedVolumes(all, containers, true);
-    const unused = unusedVolumes(all, containers, false);
+    const anon = orphanedVolumes(all, containers, live);
+    const unused = unusedVolumes(all, containers, live);
     if (unused.length === 0) {
       shell.showFlash("Nothing to prune: containers use every volume");
       return;
     }
     const scope = await shell.ask(
       "Prune volumes",
-      <p>Pruning deletes volumes no container uses, including stopped ones. Anonymous volumes are the ones Docker made without a name. You'll see the list before anything goes.</p>,
+      <p>
+        Pruning deletes volumes no container uses, including stopped ones. Orphaned volumes (marked orange) are anonymous ones nothing mounts, or ones left by a
+        compose project that's gone. You'll see the list before anything goes.
+      </p>,
       [
-        ...(anon.length ? [{ label: `Anonymous only (${anon.length})`, value: "anon", primary: true }] : []),
+        ...(anon.length ? [{ label: `Orphaned only (${anon.length})`, value: "anon", primary: true }] : []),
         { label: `All unused (${unused.length})`, value: "all", primary: !anon.length },
         { label: "Cancel", value: "cancel" },
       ],
@@ -108,7 +114,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
           key: v.name,
           icon: <VolumeIcon />,
           isContainer: false,
-          dimmed: users.length === 0,
+          status: statusOf(v),
           cells: {
             name: { text: label(v), sort: `${v.anonymous ? LAST : ""}${v.name.toLowerCase()}` },
             project: { text: v.project ?? "", sort: v.project ?? "" },
@@ -118,7 +124,8 @@ export function useVolumesSection(shell: Shell): SectionUi {
           },
         };
       }),
-    [volumes.items, containers],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [volumes.items, containers, live],
   );
 
   function openMenu(key: string | null, x: number, y: number) {
@@ -148,19 +155,18 @@ export function useVolumesSection(shell: Shell): SectionUi {
   ) : null;
 
   const tree = (
-    <TreeRow depth={1} label="Volumes" icon={<VolumeIcon />} selected={active && !path} expanded={open} onClick={() => go("")} onToggle={() => setOpen((v) => !v)}>
-      {volumes.items === null ? (
-        <TreeNote depth={2}>{engine.status === "connected" ? "Loading…" : "Not connected"}</TreeNote>
-      ) : volumes.items.filter((v) => !v.anonymous).length === 0 ? (
-        <TreeNote depth={2}>No named volumes</TreeNote>
-      ) : (
-        volumes.items
-          .filter((v) => !v.anonymous)
-          .map((v) => (
-            <TreeRow key={v.name} depth={2} label={v.name} icon={<VolumeIcon />} selected={active && path === v.name} onClick={() => go(v.name)} onContextMenu={(x, y) => openMenu(v.name, x, y)} />
-          ))
-      )}
-    </TreeRow>
+    <ResourceTree
+      label="Volumes"
+      icon={<VolumeIcon />}
+      items={volumes.items && volumes.items.map((v) => ({ key: v.name, label: label(v), status: statusOf(v) }))}
+      note={engine.status === "connected" ? "Loading…" : "Not connected"}
+      emptyText="No volumes"
+      selected={active ? path : null}
+      rootSelected={active && !path}
+      onRoot={() => go("")}
+      onOpen={go}
+      onMenu={openMenu}
+    />
   );
 
   let content: ReactNode = null;
@@ -172,7 +178,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
       content = (
         <FileList columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No volumes." view={shell.view} />
       );
-      const unused = unusedVolumes(volumes.items, containers, false).length;
+      const unused = unusedVolumes(volumes.items, containers, live).length;
       status = `${volumes.items.length.toLocaleString()} volumes · ${unused.toLocaleString()} unused`;
       if (selected.size > 1) status += ` · ${selected.size} selected`;
     } else if (!current) content = <ErrorPanel error={{ kind: "notFound", message: `There's no volume called ${path}.`, detail: "" }} />;
@@ -205,6 +211,9 @@ export function useVolumesSection(shell: Shell): SectionUi {
         </span>
         <div>
           <div className="details-title">{label(paneItem)}</div>
+          <div className="details-sub">
+            <StatusMark status={statusOf(paneItem)} /> {statusOf(paneItem).reason}
+          </div>
           <div className="details-sub">{paneItem.anonymous ? "Anonymous volume" : "Volume"}</div>
         </div>
       </div>
@@ -222,6 +231,11 @@ export function useVolumesSection(shell: Shell): SectionUi {
     dialogs: null,
     details,
     onDelete: targets.length ? () => void remove(targets) : undefined,
+    attention: { errors: 0, orphans: orphanedVolumes(volumes.items ?? [], containers, live).length },
+    placeStatus: (p: string) => {
+      const v = byName.get(p);
+      return v ? statusOf(v) : undefined;
+    },
   };
 }
 

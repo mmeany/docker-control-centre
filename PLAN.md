@@ -111,3 +111,92 @@ Each milestone ends in something runnable and tested.
 - **WSL path conversion** for UNC paths (`\\wsl$\...`) and for drives not mounted under `/mnt`. Fall back to `wslpath -u`.
 - **Merged log ordering** depends on timestamps, so request `timestamps=true` from the engine and strip them for display when the toggle is off.
 - **Files on huge directories** are slow through the archive fallback. The cap and a "directory too large to list without a shell" message are the mitigation.
+
+## M8: Status colours (agreed 2026-11-06)
+
+Make it obvious at a glance whether something is running, idle, unused or
+orphaned: in the tree, the lists (details, list and tiles), tab icons and the
+details pane, all with the same colours and marks.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| Style | Coloured label plus a coloured mark before the icon; stopped items muted grey |
+| Shapes | Every state has its own mark as well as a colour (colour-blind safe), and a tooltip naming the state and why |
+| Where | Everywhere: tree, all three list views, tab icons, details pane, Compose rows |
+| Containers | Crashes look different from clean stops |
+| Images, volumes, networks | One four-level scale: in use, idle, unused, orphaned |
+| Orphaned colour | Orange; red is kept for errors |
+| Projects | States roll up from the containers (red wins) |
+| Hidden orphans | An "Orphaned (n)" folder under Images, Volumes and Networks in the tree, shown only when there are any |
+| Section summaries | Count badges on section nodes, only for what needs attention |
+| Legend | Tooltips everywhere, plus Help › Legend |
+| Built-in networks | In use, idle or unused, never orphaned |
+| Prune | Each Prune dialog leads with "Orphaned only" |
+
+### The states
+
+| State | Colour | Mark | Containers | Images / volumes / networks | Projects |
+|---|---|---|---|---|---|
+| Running / in use | green | filled dot | running (and healthy, or no health check) | a running container uses it | all running |
+| Starting | amber | dot with ring | running, health check still "starting" | | |
+| Paused | amber | pause bars | paused | | |
+| Restarting | amber | circular arrow | restarting | | |
+| Partial | amber | half dot | | | some running |
+| Error | red | cross | exited with non-zero code, dead, or running but unhealthy | | any container in error (wins over everything) |
+| Idle | blue | half dot | | only stopped containers use it | |
+| Stopped / unused | grey (muted label) | ring | exited 0, created | nothing uses it, but it's deliberate: tagged image, named volume, a live project's network, a built-in network | all stopped |
+| Orphaned | orange | warning triangle | | nothing uses it and nothing will: an untagged image no container uses; an anonymous volume nothing mounts; a volume or network labelled with a compose project that has no containers and isn't pinned | |
+| Down | grey, muted | dashed ring | | | pinned, no containers |
+
+"Error" for a container comes from the exit code in its status ("Exited
+(137) …") and the health in the engine's list. Being killed for memory
+(OOM) only shows on inspect; it already reads as exit 137, which is red.
+
+### Work
+
+1. **Status model** (`src/status/`, pure, unit-tested): `containerStatus`,
+   `projectStatus` (roll-up), `imageStatus`, `volumeStatus` and
+   `networkStatus` return `{ state, label, reason }`. The reason is the tooltip
+   text, e.g. "Idle: only stopped containers use it (shop-worker-1)". The
+   existing rules in `sections/rules.ts` (usage, prune candidates) are rebuilt
+   on top of it, so the colours and what prune offers can never disagree.
+2. **Data:**
+   - `ContainerItem` gains `exitCode` (parsed from the status line) and
+     `health` (from the list's health field), in Rust, with tests.
+   - Pinned compose projects move from the Compose section into the shell
+     (`shell.composePinned`), so the volume and network rules can tell "the
+     project is gone" from "the project is down but pinned".
+3. **Marks and colours:**
+   - A `StatusMark` component draws the inline SVG mark for each state.
+   - The colours become tokens with light and dark values (`--st-running`,
+     `--st-idle`, `--st-unused`, `--st-orphan`, `--st-warn`, `--st-error`),
+     each checked for contrast against both backgrounds.
+   - `TreeRow` and FileList `Row` gain a `status` prop that colours the label
+     and adds the mark, in all three views.
+   - The old corner dot on container icons goes away.
+4. **Tree:**
+   - Project folders roll up their containers' states.
+   - Section nodes get count badges, only for what needs attention, e.g.
+     "Containers 2✕" in red, "Volumes 3▲" in orange.
+   - Images, Volumes and Networks get an "Orphaned (n)" folder, in orange,
+     when there are orphans.
+5. **Elsewhere:**
+   - Tab icons carry the open item's mark.
+   - The details-pane header shows the mark and its reason.
+   - Compose rows use the project roll-up.
+   - Home shows each section's badges.
+6. **Legend:** a Help button in the tab row opens a menu with Legend… (a
+   dialog with every mark, colour and meaning, in both themes) and About.
+7. **Prune:** each Prune dialog leads with "Orphaned only (n, size)", then
+   the broader choices, using the same preview and confirmation as now.
+8. **Tests and checks:**
+   - Unit tests for every state and roll-up, including the edge cases: a
+     built-in network is never orphaned, a pinned project keeps its volumes
+     "unused" rather than orphaned, and red wins in a roll-up.
+   - A `status` ui:check scenario in both themes, asserting the classes and
+     tooltips in the tree, the list and tiles views, and the badges.
+   - Screenshots reviewed for contrast in both themes.
+   - The mock gains a crashed container, an unhealthy one, orphaned volumes
+     and networks, and an idle image.

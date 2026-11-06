@@ -24,6 +24,10 @@ export interface ContainerItem {
   state: ContainerState;
   /** "Up 3 hours", "Exited (0) 2 days ago". */
   status: string;
+  /** From "Exited (137) …"; null while running or never run. */
+  exitCode: number | null;
+  /** "starting", "healthy", "unhealthy", or "" without a health check. */
+  health: "" | "starting" | "healthy" | "unhealthy";
   /** ISO 8601 UTC. */
   created: string;
   ports: string[];

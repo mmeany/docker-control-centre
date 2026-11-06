@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import type { ConfirmButton } from "../components/ConfirmDialog";
 import type { MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
+import type { Pinned } from "../api/compose";
 import type { ContainerItem } from "../api/engine";
+import type { Status } from "../status/status";
 import type { EngineState } from "../state/engine";
 import type { EngineList } from "../state/engineList";
 import type { Place } from "./places";
@@ -19,6 +21,11 @@ export interface Shell {
   engine: EngineState;
   /** Every container (shared: sections show what uses what). */
   containers: EngineList<ContainerItem>;
+  /** Pinned compose files (settings), and replacing them after pin / unpin. */
+  composePinned: Pinned[];
+  setComposePinned: (list: Pinned[]) => void;
+  /** Compose projects that exist: with containers, or pinned. */
+  liveProjects: Set<string>;
   /** View chosen for this place (pass to FileList). */
   view: ViewMode;
   /** Modal question; resolves with the chosen button's value. */
@@ -60,4 +67,8 @@ export interface SectionUi {
   details?: ReactNode;
   /** Del key. */
   onDelete?: () => void;
+  /** The state of what a path in this section shows (tab marks). */
+  placeStatus?: (path: string) => Status | undefined;
+  /** Counts for the section badges (Home). */
+  attention?: { errors: number; orphans: number };
 }

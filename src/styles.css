@@ -60,6 +60,12 @@
   --log-hit: #ffe08a;
   --log-current: #ffb84d;
   --spark: #0078d7;
+  --st-running: #1a7f37;
+  --st-warn: #9a6700;
+  --st-error: #cf222e;
+  --st-idle: #0969da;
+  --st-muted: #6e7781;
+  --st-orphan: #bc4c00;
   --svc-0: #0b6e99;
   --svc-1: #b35900;
   --svc-2: #2e7d32;
@@ -128,6 +134,12 @@
   --log-hit: #6b5a12;
   --log-current: #9e6a03;
   --spark: #4aa3f0;
+  --st-running: #3fb950;
+  --st-warn: #d29922;
+  --st-error: #f85149;
+  --st-idle: #58a6ff;
+  --st-muted: #8b949e;
+  --st-orphan: #f0883e;
   --svc-0: #4fc3f7;
   --svc-1: #ffb74d;
   --svc-2: #81c784;
@@ -208,10 +220,6 @@ button { font: inherit; color: inherit; }
 .conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--state-stopped); }
 .conn-dot.connected { background: var(--state-running); }
 .conn-dot.disconnected, .conn-dot.unavailable { background: var(--state-bad); }
-.state-dot { fill: var(--state-stopped); stroke: var(--state-stroke); }
-.state-dot.state-running { fill: var(--state-running); }
-.state-dot.state-paused, .state-dot.state-restarting { fill: var(--state-paused); }
-.state-dot.state-dead { fill: var(--state-bad); }
 
 /* ---------- Panes ---------- */
 .panes { flex: 1; display: flex; min-height: 0; }
@@ -547,3 +555,30 @@ button { font: inherit; color: inherit; }
 /* ---------- Container files ---------- */
 .files-view.drop-target { outline: 2px dashed var(--drop); outline-offset: -4px; background: var(--drop-bg); }
 .files-note { margin: 4px 8px; }
+
+/* ---------- Status colours (see src/status) ---------- */
+.status-mark { flex-shrink: 0; }
+.st-running { color: var(--st-running); }
+.st-starting, .st-paused, .st-restarting, .st-partial { color: var(--st-warn); }
+.st-error { color: var(--st-error); }
+.st-idle { color: var(--st-idle); }
+.st-stopped, .st-unused, .st-down { color: var(--st-muted); }
+.st-orphaned { color: var(--st-orphan); }
+/* Labels: coloured text, muted when stopped / unused. */
+.tree-label.st-running, .fl-name.st-running { color: var(--st-running); }
+.tree-label.st-error, .fl-name.st-error { color: var(--st-error); }
+.tree-label.st-orphaned, .fl-name.st-orphaned { color: var(--st-orphan); }
+.tree-label.st-idle, .fl-name.st-idle { color: var(--st-idle); }
+.tree-label.st-starting, .tree-label.st-paused, .tree-label.st-restarting, .tree-label.st-partial,
+.fl-name.st-starting, .fl-name.st-paused, .fl-name.st-restarting, .fl-name.st-partial { color: var(--st-warn); }
+.tree-label.st-stopped, .tree-label.st-unused, .tree-label.st-down,
+.fl-name.st-stopped, .fl-name.st-unused, .fl-name.st-down { color: var(--st-muted); }
+.fl-name { overflow: hidden; text-overflow: ellipsis; }
+/* Section badges */
+.tree-badge { margin-left: 6px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+.tree-badge.st-error { color: var(--st-error); }
+.tree-badge.st-orphaned { color: var(--st-orphan); }
+.tree-mark-gap { display: inline-block; width: 10px; flex-shrink: 0; }
+/* Legend */
+.legend-table td { padding: 4px 8px; vertical-align: top; }
+.legend-table td:first-child { white-space: nowrap; }

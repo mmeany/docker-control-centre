@@ -6,7 +6,10 @@ import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, GearIcon, PlusIcon, Refresh
 
 export interface TabInfo {
   id: number;
+  /** Tooltip. */
   title: string;
+  /** Shown on the tab (defaults to title). */
+  label?: string;
   icon: ReactNode;
 }
 
@@ -36,6 +39,8 @@ interface Props {
   editToken: number;
   onThemeChange: (theme: ThemePref) => void;
   onOpenSettings: () => void;
+  /** Help menu, at the button's bottom-left corner. */
+  onOpenHelp: (x: number, y: number) => void;
   onRefresh: () => void;
   onCopyLocation: () => void;
   onBack: () => void;
@@ -69,7 +74,7 @@ export function Toolbar(p: Props) {
               onAuxClick={(e) => e.button === 1 && p.onCloseTab(t.id)}
             >
               {t.icon}
-              <span className="tab-title">{t.title}</span>
+              <span className="tab-title">{t.label ?? t.title}</span>
               <button
                 className="tab-close"
                 title="Close tab (Ctrl+W)"
@@ -88,6 +93,16 @@ export function Toolbar(p: Props) {
         </div>
         <div className="spacer" />
         {p.busy && <span className="busy">Working…</span>}
+        <button
+          className="cmd-btn"
+          title="Help: what the colours mean, about this app"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            p.onOpenHelp(r.left, r.bottom);
+          }}
+        >
+          <span className="cmd-label">Help</span>
+        </button>
         <button className="cmd-btn" title="Settings: where compose runs" onClick={p.onOpenSettings}>
           <GearIcon /> <span className="cmd-label">Settings</span>
         </button>
