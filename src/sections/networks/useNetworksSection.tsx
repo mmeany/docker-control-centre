@@ -2,6 +2,7 @@
 // own networks (bridge, host, none) can't be deleted.
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { resourcesApi, type NetworkItem } from "../../api/resources";
+import { Board } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -170,6 +171,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
   );
 
   let content: ReactNode = null;
+  let board: ReactNode = undefined;
   let status = "";
   if (active) {
     if (networks.error) content = <ErrorPanel error={networks.error} onRetry={networks.refresh} />;
@@ -177,6 +179,22 @@ export function useNetworksSection(shell: Shell): SectionUi {
     else if (!path) {
       content = (
         <FileList columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No networks." view={shell.view} />
+      );
+      board = (
+        <Board
+          columns={COLUMNS}
+          rows={rows}
+          selected={selected}
+          onSelectionChange={setSelected}
+          onOpen={go}
+          onMenu={openMenu}
+          actions={(k) => {
+            const n = byName.get(k);
+            return [{ label: "Delete…", icon: <DeleteIcon />, danger: true, disabled: !n || n.builtin, title: n?.builtin ? "Docker's own networks can't be deleted" : "Delete…", onClick: () => n && void remove([n]) }];
+          }}
+          bulk={[{ label: "Delete…", danger: true, disabled: deletable.length === 0, onClick: () => void remove(targets) }]}
+          emptyText="No networks."
+        />
       );
       status = `${networks.items.length.toLocaleString()} networks`;
       if (selected.size > 1) status += ` · ${selected.size} selected`;
@@ -223,6 +241,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
   return {
     tree,
     content,
+    board,
     commands,
     status,
     busy: active && networks.loading,

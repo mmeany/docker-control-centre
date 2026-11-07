@@ -1,5 +1,6 @@
-// Streams: logs, stats and terminals arrive over Tauri channels; every start
-// call returns an id to stop it with. Pop-out windows show one place.
+// Streams: logs, stats, engine-wide stats totals and terminals arrive over
+// Tauri channels; every start call returns an id to stop it with. Pop-out
+// windows show one place.
 import { Channel } from "@tauri-apps/api/core";
 import { call, toAppError } from "./core";
 
@@ -39,6 +40,43 @@ export interface StatsSample {
   pids: number;
 }
 
+/** One container's latest figures in the totals; rates are bytes per second. */
+export interface ContainerFigures {
+  id: string;
+  name: string;
+  cpuPercent: number;
+  memUsed: number;
+  memLimit: number;
+  netRxRate: number;
+  netTxRate: number;
+  blockReadRate: number;
+  blockWriteRate: number;
+}
+
+/** Engine-wide totals, sent every 2 s while the dashboard overview is open. */
+export interface TotalsSnapshot {
+  /** Sum over containers; 100 = one CPU. */
+  cpuPercent: number;
+  /** CPUs the engine has (the most any container reports). */
+  onlineCpus: number;
+  memUsed: number;
+  /** The largest container limit: the engine's memory when none are limited. */
+  memLimit: number;
+  netRxRate: number;
+  netTxRate: number;
+  blockReadRate: number;
+  blockWriteRate: number;
+  /** Containers counted. */
+  counted: number;
+  /** Running containers left out by the cap (100). */
+  skipped: number;
+  /** Highest CPU first. */
+  containers: ContainerFigures[];
+}
+
+/** The stream ends (`end`) when the engine goes away; start it again on reconnect. */
+export type TotalsMessage = ({ type: "totals" } & TotalsSnapshot) | { type: "end"; error: string | null };
+
 /** A channel, or an AppError when there's no Tauri runtime (plain browser). */
 function channel<T>(onMessage: (m: T) => void): Channel<T> {
   try {
@@ -65,6 +103,8 @@ export const streamsApi = {
   terminalClose: (session: number) => call<void>("terminal_close", { session }),
 
   stats: async (id: string, onSample: (s: StatsSample) => void) => call<number>("stream_stats", { id, onMessage: channel(onSample) }),
+  /** Engine-wide totals: one stats stream per running container, summed in Rust. */
+  statsTotals: async (onMessage: (m: TotalsMessage) => void) => call<number>("stream_stats_totals", { onMessage: channel(onMessage) }),
 
   openPopout: (address: string, title: string) => call<void>("open_popout", { address, title }),
 };

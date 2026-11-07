@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppError } from "../../api/core";
 import { resourcesApi, type ImageDetails, type ImageItem } from "../../api/resources";
+import { Board } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -241,6 +242,7 @@ export function useImagesSection(shell: Shell): SectionUi {
 
   const loaded = details?.data && inspectTarget && details.id === inspectTarget.id ? details.data : null;
   let content: ReactNode = null;
+  let board: ReactNode = undefined;
   let status = "";
   if (active) {
     if (images.error) content = <ErrorPanel error={images.error} onRetry={images.refresh} />;
@@ -256,6 +258,19 @@ export function useImagesSection(shell: Shell): SectionUi {
           onContextMenu={openMenu}
           emptyText="No images. Use Pull… to download one."
           view={shell.view}
+        />
+      );
+      board = (
+        <Board
+          columns={COLUMNS}
+          rows={rows}
+          selected={selected}
+          onSelectionChange={setSelected}
+          onOpen={go}
+          onMenu={openMenu}
+          actions={(k) => [{ label: "Delete…", icon: <DeleteIcon />, danger: true, onClick: () => { const i = byKey.get(k); if (i) void remove([i]); } }]}
+          bulk={[{ label: "Delete…", danger: true, disabled: targets.length === 0, onClick: () => void remove(targets) }]}
+          emptyText="No images. Use Pull… to download one."
         />
       );
       const n = images.items.length;
@@ -317,6 +332,7 @@ export function useImagesSection(shell: Shell): SectionUi {
   return {
     tree,
     content,
+    board,
     commands,
     status,
     busy: active && images.loading,

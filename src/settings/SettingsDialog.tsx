@@ -1,9 +1,11 @@
-// Settings: where `docker compose` runs (inside WSL, which a WSL engine
-// needs for bind mounts, or on this machine) and which WSL distro.
+// Settings: the layout (Explorer or dashboard), where `docker compose` runs
+// (inside WSL, which a WSL engine needs for bind mounts, or on this machine)
+// and which WSL distro.
 import { useEffect, useState } from "react";
 import { appApi } from "../api/app";
 import type { AppError, Settings } from "../api/core";
 import { composeApi, COMPOSE_DISTRO_KEY, COMPOSE_MODE_KEY, type ComposeOutput, type Distro } from "../api/compose";
+import { LAYOUT_KEY, LAYOUTS, readLayout, type Layout } from "../shell/layout";
 
 interface Props {
   settings: Settings;
@@ -12,6 +14,7 @@ interface Props {
 }
 
 export function SettingsDialog({ settings, onSaved, onClose }: Props) {
+  const [layout, setLayout] = useState<Layout>(readLayout(settings.values[LAYOUT_KEY]));
   const [mode, setMode] = useState<"wsl" | "host">(settings.values[COMPOSE_MODE_KEY] === "host" ? "host" : "wsl");
   const [distro, setDistro] = useState(typeof settings.values[COMPOSE_DISTRO_KEY] === "string" ? (settings.values[COMPOSE_DISTRO_KEY] as string) : "");
   const [distros, setDistros] = useState<Distro[] | null>(null);
@@ -28,6 +31,7 @@ export function SettingsDialog({ settings, onSaved, onClose }: Props) {
   async function save(): Promise<boolean> {
     setSaving(true);
     try {
+      await appApi.setValue(LAYOUT_KEY, layout);
       await appApi.setValue(COMPOSE_MODE_KEY, mode);
       onSaved(await appApi.setValue(COMPOSE_DISTRO_KEY, distro || null));
       return true;
@@ -59,6 +63,14 @@ export function SettingsDialog({ settings, onSaved, onClose }: Props) {
           Settings
         </div>
         <div className="dialog-body">
+          <fieldset className="radio-group">
+            <legend>Layout</legend>
+            {LAYOUTS.map((l) => (
+              <label key={l.id} className="check-row">
+                <input type="radio" name="layout" checked={layout === l.id} onChange={() => setLayout(l.id)} /> {l.label}: {l.title.charAt(0).toLowerCase() + l.title.slice(1)}
+              </label>
+            ))}
+          </fieldset>
           <fieldset className="radio-group">
             <legend>Run docker compose</legend>
             <label className="check-row">

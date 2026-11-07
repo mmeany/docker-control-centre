@@ -2,6 +2,7 @@
 // Deleting a volume destroys its data, so it's a typed confirmation.
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { resourcesApi, type VolumeItem } from "../../api/resources";
+import { Board } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -171,6 +172,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
   );
 
   let content: ReactNode = null;
+  let board: ReactNode = undefined;
   let status = "";
   if (active) {
     if (volumes.error) content = <ErrorPanel error={volumes.error} onRetry={volumes.refresh} />;
@@ -178,6 +180,19 @@ export function useVolumesSection(shell: Shell): SectionUi {
     else if (!path) {
       content = (
         <FileList columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No volumes." view={shell.view} />
+      );
+      board = (
+        <Board
+          columns={COLUMNS}
+          rows={rows}
+          selected={selected}
+          onSelectionChange={setSelected}
+          onOpen={go}
+          onMenu={openMenu}
+          actions={(k) => [{ label: "Delete…", icon: <DeleteIcon />, danger: true, onClick: () => { const v = byName.get(k); if (v) void remove([v]); } }]}
+          bulk={[{ label: "Delete…", danger: true, disabled: targets.length === 0, onClick: () => void remove(targets) }]}
+          emptyText="No volumes."
+        />
       );
       const unused = unusedVolumes(volumes.items, containers, live).length;
       status = `${volumes.items.length.toLocaleString()} volumes · ${unused.toLocaleString()} unused`;
@@ -225,6 +240,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
   return {
     tree,
     content,
+    board,
     commands,
     status,
     busy: active && volumes.loading,

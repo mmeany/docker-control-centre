@@ -226,6 +226,47 @@
       timers[id] = setInterval(tick, 1000);
       return id;
     },
+    // Engine-wide totals: the running containers' figures, summed (window.__totalsSkipped
+    // pretends the cap left some out). Ticks faster than Rust's 2 s to keep checks quick.
+    stream_stats_totals: (a) => {
+      const id = ++streamId;
+      let k = 0;
+      const tick = () => {
+        k++;
+        const list = containers
+          .filter((c) => c.state === "running")
+          .map((c, i) => ({
+            id: c.id,
+            name: c.name,
+            cpuPercent: Math.max(0, 8 + 14 * i + 6 * Math.sin(k / 2 + i)),
+            memUsed: (60 + 45 * i) * 1e6,
+            memLimit: 16e9,
+            netRxRate: 12_000 + 3_000 * i,
+            netTxRate: 4_000 + 1_000 * i,
+            blockReadRate: 0,
+            blockWriteRate: 2_048 * (i + 1),
+          }))
+          .sort((x, y) => y.cpuPercent - x.cpuPercent);
+        const sum = (f) => list.reduce((t, c) => t + c[f], 0);
+        send(a.onMessage, {
+          type: "totals",
+          cpuPercent: sum("cpuPercent"),
+          onlineCpus: 8,
+          memUsed: sum("memUsed"),
+          memLimit: 16e9,
+          netRxRate: sum("netRxRate"),
+          netTxRate: sum("netTxRate"),
+          blockReadRate: sum("blockReadRate"),
+          blockWriteRate: sum("blockWriteRate"),
+          counted: list.length,
+          skipped: window.__totalsSkipped ?? 0,
+          containers: list,
+        });
+      };
+      tick();
+      timers[id] = setInterval(tick, 500);
+      return id;
+    },
     list_images: () => JSON.parse(JSON.stringify(images)),
     inspect_image: (a) => {
       const i = images.find((x) => x.id === a.id);

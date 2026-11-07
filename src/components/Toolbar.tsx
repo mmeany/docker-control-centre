@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
 import type { ViewMode } from "./FileList";
 import { HOME, placeCrumbs, type Place } from "../shell/places";
-import { BackIcon, CloseIcon, CopyIcon, ForwardIcon, GearIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
+import { BackIcon, CloseIcon, CopyIcon, DashboardIcon, ForwardIcon, GearIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
 
 export interface TabInfo {
   id: number;
@@ -39,6 +39,8 @@ interface Props {
   editToken: number;
   onThemeChange: (theme: ThemePref) => void;
   onOpenSettings: () => void;
+  /** Switches the main window to the dashboard layout. */
+  onSwitchLayout: () => void;
   /** Help menu, at the button's bottom-left corner. */
   onOpenHelp: (x: number, y: number) => void;
   onRefresh: () => void;
@@ -93,6 +95,9 @@ export function Toolbar(p: Props) {
         </div>
         <div className="spacer" />
         {p.busy && <span className="busy">Working…</span>}
+        <button className="cmd-btn" title="Switch to the dashboard layout (also in Settings)" onClick={p.onSwitchLayout}>
+          <DashboardIcon /> <span className="cmd-label">Dashboard</span>
+        </button>
         <button
           className="cmd-btn"
           title="Help: what the colours mean, about this app"
@@ -103,7 +108,7 @@ export function Toolbar(p: Props) {
         >
           <span className="cmd-label">Help</span>
         </button>
-        <button className="cmd-btn" title="Settings: where compose runs" onClick={p.onOpenSettings}>
+        <button className="cmd-btn" title="Settings: layout, where compose runs" onClick={p.onOpenSettings}>
           <GearIcon /> <span className="cmd-label">Settings</span>
         </button>
         <label className="field-label" htmlFor="theme">

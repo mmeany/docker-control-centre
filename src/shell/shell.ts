@@ -58,6 +58,8 @@ export interface SectionUi {
   tree: ReactNode;
   /** Main-panel content when the section is active. */
   content: ReactNode;
+  /** Dashboard layout: cards or a roomy table in place of `content` (optional). */
+  board?: ReactNode;
   /** Command-bar buttons when active. */
   commands: ReactNode;
   /** Status-bar text when active. */
@@ -70,6 +72,13 @@ export interface SectionUi {
   details?: ReactNode;
   /** Del key. */
   onDelete?: () => void;
+  /**
+   * Runs one of the section's verbs on one item from outside the section
+   * (dashboard overview, boards), with the section's own confirmations and
+   * dialogs. Containers: a container id and a container verb ("restart").
+   * Compose: a project name and a compose verb ("up", "stop").
+   */
+  act?: (key: string, verb: string) => void;
   /** The state of what a path in this section shows (tab marks). */
   placeStatus?: (path: string) => Status | undefined;
   /** Counts for the section badges (Home). */

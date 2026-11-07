@@ -9,6 +9,7 @@ mod engine;
 mod error;
 mod resources;
 mod settings;
+mod stats_totals;
 mod streams;
 mod tar;
 mod util;
@@ -59,6 +60,7 @@ pub fn run() {
             commands::streams::terminal_resize,
             commands::streams::terminal_close,
             commands::streams::stream_stats,
+            commands::streams::stream_stats_totals,
             commands::window::open_popout,
             commands::files::list_container_dir,
             commands::files::copy_from_container,

@@ -5,6 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppError } from "../../api/core";
 import { engineApi, type ContainerDetails, type ContainerItem } from "../../api/engine";
+import { Board, type BoardAction } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -520,7 +521,43 @@ export function useContainersSection(shell: Shell): SectionUi {
   // ---------------------------------------------------------------------------
   // Content, details pane and status
 
+  // Dashboard board: Start / Stop, Restart and Logs per row, the rest under More.
+  function rowActions(key: string): BoardAction[] {
+    const list = containersOf(key);
+    const isProject = parseContainers(key)?.kind === "project";
+    const out: BoardAction[] = [];
+    if (applicable("stop", list).length) out.push({ label: "Stop", icon: VERB_ICONS.stop, onClick: () => doVerb("stop", list) });
+    else if (applicable("start", list).length) out.push({ label: "Start", icon: VERB_ICONS.start, onClick: () => doVerb("start", list) });
+    out.push({ label: "Restart", icon: VERB_ICONS.restart, disabled: applicable("restart", list).length === 0, onClick: () => doVerb("restart", list) });
+    if (!isProject) out.push({ label: "Logs", icon: <LogsIcon />, onClick: () => go(`${key}/logs`) });
+    return out;
+  }
+  const bulk: BoardAction[] = [
+    ...(["start", "stop", "restart"] as Verb[]).map((v) => ({ label: VERBS[v].label, disabled: !can(v), onClick: () => doVerb(v, targets) })),
+    { label: "Delete…", danger: true, disabled: !can("remove"), onClick: () => void remove(targets) },
+  ];
+  const projectRows = (key: string) => {
+    const l = parseContainers(key);
+    return l?.kind === "project" ? (projectByName.get(l.project)?.containers ?? []).map(containerRow) : [];
+  };
+  const boardOf = (emptyText: string, withChildren: boolean) => (
+    <Board
+      key={path}
+      columns={COLUMNS}
+      rows={rows}
+      childrenOf={withChildren ? projectRows : undefined}
+      selected={selected}
+      onSelectionChange={setSelected}
+      onOpen={go}
+      onMenu={openContextMenu}
+      actions={rowActions}
+      bulk={bulk}
+      emptyText={emptyText}
+    />
+  );
+
   let content: ReactNode = null;
+  let board: ReactNode = undefined;
   let status = "";
   let details: ReactNode = undefined;
   if (active) {
@@ -547,10 +584,12 @@ export function useContainersSection(shell: Shell): SectionUi {
       content = <div className="empty-note">{connected || engine.status === "connecting" ? "Loading…" : engine.message || "Not connected to the engine."}</div>;
     } else if (loc.kind === "root") {
       content = list("No containers. Containers you create or start with Compose show up here.");
+      board = boardOf("No containers. Containers you create or start with Compose show up here.", true);
       const running = items.filter((c) => c.state === "running").length;
       status = `${plural(projects.length, "project")} · ${plural(items.length, "container")} · ${running.toLocaleString()} running`;
     } else if (loc.kind === "project") {
       content = project ? list("This project has no containers.") : <ErrorPanel error={notFound(`There's no compose project called ${loc.project}.`)} />;
+      if (project) board = boardOf("This project has no containers.", false);
       if (project) status = `${plural(project.containers.length, "container")} · ${summarise(project.containers)}`;
     } else if (!container) {
       content = <ErrorPanel error={notFound(`There's no container called ${loc.name}. It may have been removed.`)} />;
@@ -614,6 +653,7 @@ export function useContainersSection(shell: Shell): SectionUi {
   return {
     tree,
     content,
+    board,
     commands,
     status,
     busy: active && loading,
@@ -621,6 +661,13 @@ export function useContainersSection(shell: Shell): SectionUi {
     dialogs: null,
     details,
     onDelete: targets.length ? () => void remove(targets) : undefined,
+    act: (id: string, verb: string) => {
+      const c = (shell.containers.items ?? []).find((x) => x.id === id);
+      if (!c || !(verb in VERBS)) return;
+      if (verb === "kill") void kill([c]);
+      else if (verb === "remove") void remove([c]);
+      else void run(verb as Verb, [c]);
+    },
     attention: sectionAttention,
     placeStatus: (p: string) => {
       const l = parseContainers(p);

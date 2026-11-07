@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
 import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb } from "../../api/compose";
+import { Board, type BoardAction } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
@@ -328,7 +329,19 @@ export function useComposeSection(shell: Shell): SectionUi {
     </TreeRow>
   );
 
+  // Dashboard cards: Up or Stop, and Logs; the rest under More.
+  function cardActions(key: string): BoardAction[] {
+    const p = byName.get(key);
+    if (!p) return [];
+    const out: BoardAction[] = [];
+    if (p.containers.length === 0 || p.running < p.containers.length) out.push({ label: "Up", icon: <PlayIcon />, disabled: !canRun(p), onClick: () => run("up", p) });
+    if (p.running > 0) out.push({ label: "Stop", icon: <StopIcon />, onClick: () => run("stop", p) });
+    out.push({ label: "Logs", icon: <LogsIcon />, disabled: p.containers.length === 0, onClick: () => go(`${p.name}/logs`) });
+    return out;
+  }
+
   let content: ReactNode = null;
+  let board: ReactNode = undefined;
   let status = "";
   if (active) {
     const list = shell.containers;
@@ -345,6 +358,19 @@ export function useComposeSection(shell: Shell): SectionUi {
           onContextMenu={openMenu}
           emptyText="No compose projects. Projects you start show up here; use Pin file… to keep one listed while it's down."
           view={shell.view}
+        />
+      );
+      board = (
+        <Board
+          layout="cards"
+          columns={COLUMNS}
+          rows={projectRows}
+          selected={selected}
+          onSelectionChange={setSelected}
+          onOpen={go}
+          onMenu={openMenu}
+          actions={cardActions}
+          emptyText="No compose projects. Projects you start show up here; use Pin file… to keep one listed while it's down."
         />
       );
       const up = projects.filter((p) => p.running > 0).length;
@@ -429,12 +455,19 @@ export function useComposeSection(shell: Shell): SectionUi {
   return {
     tree,
     content,
+    board,
     commands,
     status,
     busy: active && shell.containers.loading,
     refresh,
     dialogs,
     details,
+    act: (name: string, verb: string) => {
+      const p = byName.get(name);
+      if (!p || !canRun(p)) return;
+      if (verb === "down") void down(p);
+      else if (["up", "stop", "start", "restart", "pull"].includes(verb)) run(verb as ComposeVerb, p);
+    },
     attention: sectionAttention,
     placeStatus: (p: string) => {
       const pr = byName.get(p.split("/")[0]);

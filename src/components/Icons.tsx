@@ -319,3 +319,36 @@ export function PruneIcon({ size = 16 }: P) {
     </svg>
   );
 }
+
+/** Four tiles: the dashboard layout. */
+export function DashboardIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.5" y="1.5" width="6" height="7" rx="1" fill="#d6e9fb" stroke="#5b7da8" strokeWidth="0.9" />
+      <rect x="9" y="1.5" width="5.5" height="4" rx="1" fill="#d6e9fb" stroke="#5b7da8" strokeWidth="0.9" />
+      <rect x="9" y="7" width="5.5" height="7.5" rx="1" fill="#d6e9fb" stroke="#5b7da8" strokeWidth="0.9" />
+      <rect x="1.5" y="10" width="6" height="4.5" rx="1" fill="#d6e9fb" stroke="#5b7da8" strokeWidth="0.9" />
+    </svg>
+  );
+}
+
+/** A tree beside a list: the Explorer layout. */
+export function ExplorerIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.5" y="2" width="13" height="12" rx="1" fill="#fff" stroke="#5b7da8" strokeWidth="0.9" />
+      <path d="M6 2 V14" stroke="#5b7da8" strokeWidth="0.9" />
+      <path d="M3 5 H4.5 M3 7.5 H4.5 M3 10 H4.5 M7.5 5 H13 M7.5 7.5 H13 M7.5 10 H13" stroke="#5b7da8" strokeWidth="0.9" />
+    </svg>
+  );
+}
+
+/** Side panel open / closed (follows the text colour). */
+export function SidebarIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M6 2.5 V13.5" stroke="currentColor" strokeWidth="1.1" />
+    </svg>
+  );
+}

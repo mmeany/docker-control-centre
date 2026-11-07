@@ -4,7 +4,8 @@ A Windows desktop app for managing a Docker engine the way File Explorer
 manages files: tabs, a tree, an address bar you can type into, and compose
 projects, containers, images, volumes and networks as folders. Built for
 Docker Engine running in WSL (no Docker Desktop needed). Tauri 2, React and
-Rust.
+Rust. Prefer a dashboard? Switch the layout and the same app has side
+navigation, a live overview and cards instead.
 
 ![Containers, with the details pane](docs/screenshots/containers.png)
 
@@ -58,6 +59,38 @@ the details pane and the window's size and position come back next time.
 | ![Pulling an image](docs/screenshots/pull.png) | ![Status colours](docs/screenshots/status.png) |
 | Pulling an image | Status colours: crashed, unhealthy, partly running |
 
+## Dashboard layout
+
+Explorer is the default. **Dashboard** in the top bar (or **Settings ›
+Layout**) switches the window to a dashboard, straight away and staying where
+you are; **Explorer** in the dashboard's header switches back, with your tabs
+as you left them.
+
+- **Overview:** live totals for the whole engine (CPU, memory, network and
+  disk, with five minutes of history), the top five containers by CPU and by
+  memory, what needs attention (problem containers with Restart and Logs,
+  orphans with a link to prune them) and a card per Compose project with Up
+  and Stop. The totals come from one stats stream per running container,
+  only while the overview is open, and count at most 100 containers (it says
+  so when there are more).
+- **Sections** in a side panel you can collapse, with the same badges as the
+  tree. Lists become boards: containers grouped under their projects, Compose
+  projects as cards, and images, volumes and networks as tables. Each row has
+  its common actions as buttons and the rest under **More**; tick several
+  rows for a bar that acts on all of them. Opening an item shows the same
+  logs, terminal, stats, files and inspect views as Explorer.
+- Back, forward and up are in the header with the place as a breadcrumb, and
+  details open in a drawer on the right. There are no tabs or address bar, so
+  their shortcuts do nothing in the dashboard. Pop-out windows look the same
+  in both layouts.
+
+| | |
+|---|---|
+| ![The dashboard overview](docs/screenshots/dashboard-overview.png) | ![Containers board with two selected](docs/screenshots/dashboard-containers.png) |
+| The overview | Containers, with the bulk bar |
+| ![Compose projects as cards](docs/screenshots/dashboard-compose.png) | |
+| Compose projects | |
+
 ## Install
 
 Download the installer from the
@@ -102,7 +135,9 @@ distro, or switch to running compose on this computer (Docker Desktop), in
 | Ctrl+Shift+5 / 6 / 7 | List / details / tiles view |
 | Alt+Shift+P | Show or hide the details pane |
 
-In a terminal, the shell gets every key (Ctrl+W, Ctrl+L, …).
+In a terminal, the shell gets every key (Ctrl+W, Ctrl+L, …). In the
+dashboard layout the tab, address and view shortcuts do nothing; on a board,
+Ctrl+click adds to the selection and Esc clears it.
 
 ## Development
 

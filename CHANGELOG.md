@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **Dashboard layout:** a second layout beside Explorer, chosen in Settings
+  or with the Dashboard / Explorer button in either layout. It switches
+  straight away, keeps the place you're on and keeps your tabs for when you
+  switch back. Side navigation with section badges (collapsible), a header
+  with back / forward / up and the place as a breadcrumb, a details drawer.
+- **Overview:** engine-wide CPU, memory, network and disk with five minutes
+  of history, the top five containers by CPU and memory, what needs
+  attention (problem containers with Restart and Logs, orphans to review)
+  and Compose project cards with Up and Stop. The totals come from a new
+  stream (one stats stream per running container, following start and die
+  events, at most 100) that runs only while the overview is open.
+- **Boards:** in the dashboard, lists show containers grouped by project,
+  Compose projects as cards, and images, volumes and networks as tables,
+  with tick-box selection, each row's common actions as buttons, a More menu
+  and a bar for acting on the selection.
+- The ui-check runner takes `UI_CHECK_PORT`, and no longer leaves its Vite
+  server running on Windows.
+
 ## 0.4.0 (2026-11-07)
 
 - **Compose file:** each project has a Compose file item (beside Logs, and

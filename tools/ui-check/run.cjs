@@ -6,16 +6,18 @@
 //   npm run ui:check                      every scenario, dark theme
 //   npm run ui:check -- smoke --light     one scenario, light theme
 //   npm run ui:check -- smoke --both      both themes
+//   UI_CHECK_PORT=1430 npm run ui:check   another port (e.g. a second checkout)
 //
 // Needs Playwright once per machine (not a project dependency):
 //   npm i -D playwright && npx playwright install chromium
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 
 const ROOT = path.resolve(__dirname, "../..");
-const URL = "http://localhost:1420";
+const PORT = process.env.UI_CHECK_PORT || "1420";
+const URL = `http://localhost:${PORT}`;
 const OUT = path.join(__dirname, "out");
 
 let chromium;
@@ -51,7 +53,8 @@ const isWin = process.platform === "win32";
 function stopServer(child) {
   if (!child) return;
   try {
-    if (isWin) spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    // Synchronous: the runner exits straight after, which would kill an async taskkill first.
+    if (isWin) spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     else process.kill(-child.pid);
   } catch {
     /* already gone */
@@ -63,7 +66,7 @@ async function ensureDevServer() {
     console.log(`Using the dev server already running at ${URL} (make sure it's this project's).`);
     return null;
   }
-  const child = spawn(isWin ? "npx.cmd" : "npx", ["vite", "--port", "1420", "--strictPort"], {
+  const child = spawn(isWin ? "npx.cmd" : "npx", ["vite", "--port", PORT, "--strictPort"], {
     cwd: ROOT,
     stdio: "ignore",
     shell: isWin,
@@ -74,7 +77,7 @@ async function ensureDevServer() {
     if (await up()) return child;
   }
   stopServer(child);
-  throw new Error("The Vite dev server didn't start on port 1420.");
+  throw new Error(`The Vite dev server didn't start on port ${PORT}.`);
 }
 
 (async () => {

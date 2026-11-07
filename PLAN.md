@@ -295,3 +295,75 @@ Show where a stack came from and what it says.
   leaving drops it.
 - A missing file says it may have moved or been deleted.
 - Containers: the project menu links to it; the details pane lists files.
+
+## M11: Dashboard view (agreed 2026-11-07, on a branch)
+
+Let the user pick a dashboard layout instead of Explorer. Built on
+`claude/explorer-dashboard-toggle-73dd5b` so it can be thrown away; one
+commit at the end.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| What it is | A second shell over the same sections. Section hooks, actions, confirms, dialogs and item views (logs, terminal, stats, files, inspect) are shared; only the chrome and the list views differ |
+| Choosing | App-wide setting `app.layout` (`explorer` / `dashboard`) in settings values; a Layout choice in Settings plus a Dashboard / Explorer button in each layout's top bar; switches live, staying on the same place. Explorer is the default. Nothing is drawn until settings load, so Explorer never flashes first |
+| Navigation | Places stay the routing model (history, pop-outs, session). No address bar or tabs on screen; a breadcrumb title instead. The dashboard drives the active tab; the other tabs are kept in the session and come back on switching to Explorer |
+| Lists | `SectionUi` gains an optional `board` (card grid or roomy table with row actions) built from data the hook already loads. A section without one falls back to its `FileList` |
+| Actions | Inline icon buttons per row / card for the common verbs plus an overflow menu (the context menu items); selecting several shows a bulk action bar. Verbs from the existing action rules (`containers/actions.ts` etc.), same confirmations |
+| Overview | Dashboard Home: totals tiles with sparklines (CPU %, memory used / limit, network and block I/O rates, ~5 min history), top 5 by CPU and by memory, problems list (error, restarting, unhealthy, orphans) with quick actions, Compose project cards (running / total, up / stop). Explorer's Home is unchanged |
+| Live totals | New aggregate stats stream. The engine has no engine-wide stats, so Rust opens one stats stream per running container, follows the change feed to add / drop them, and sends totals plus per-container figures every ~2 s. Runs only while the overview is on screen; capped at 100 containers (says so when hit). History is kept in the UI only, never persisted |
+| Layout | Collapsible left nav (Overview, then the sections with badges; Settings and Help at the bottom), a header (back / forward, breadcrumb title, filter, layout toggle), details as a right drawer, status bar kept |
+| Look | Roomier: 13-14px, 32-36px rows, card spacing. All colours from tokens (new tokens only with light and dark values); status colours still only from `status/status.ts`. Explorer stays 12px |
+| Keyboard | Back / forward / up, F5, Del, F2, Enter, Alt+Enter, Ctrl+F and the details pane toggle work. Tab shortcuts, Ctrl+L / Alt+D and the view-mode keys do nothing |
+| Pop-outs | Keep their current minimal frame in both layouts |
+| Tree filtering | Not used: the dashboard has no tree. Badges count as now |
+
+### Work
+
+1. **Refactor, no behaviour change.** Move the shell state out of `App.tsx`
+   into `useAppShell` (tabs, history, engine, Shell object, sections, keyboard,
+   shared dialogs); `ExplorerLayout` renders what it returns. `ui:check`
+   screenshots must match before and after.
+2. **Setting and dashboard shell.** `app.layout` (`shell/layout.ts`) in the
+   Settings dialog and as a button in each layout, `DashboardLayout` (nav,
+   header, section command bar, drawer, status bar; nav collapse remembered
+   per machine), keyboard rules above; sections fall back to their Explorer
+   content, lists forced to details. Home shows section cards until step 4.
+3. **Aggregate stats stream.** `src-tauri/src/stats_totals.rs` (summing,
+   rates, the cap; unit-tested on samples) and `stream_stats_totals` beside
+   `stream_stats`: lists running containers, then follows its own `start` /
+   `die` event subscription (a container's stats stream also ends when it
+   stops), refilling freed slots from those the cap skipped. Helpers are
+   abort-on-drop, so `stop_stream` / closing the window ends them all. Ends
+   with `{type: "end", error}` when the engine goes; `statsTotals` in
+   `api/streams.ts`; mocked in ui-check; integration test with two containers.
+4. **Overview.** `src/dashboard/`: `Overview.tsx` (CPU as a share of the
+   engine, memory scaled to its limit, network and disk rates, five-minute
+   sparklines; top 5 by CPU and memory linking to stats; problems and
+   orphans with Restart / Logs / Review; project cards with Up / Stop /
+   Open), `useTotals` (runs while mounted and connected), `overviewData.ts`
+   (unit-tested). Quick actions go through a new optional
+   `SectionUi.act(key, verb)`, so they use the section's own confirmations
+   and dialogs (compose's run dialog); boards will use it too.
+5. **Boards.** One shared `components/Board.tsx` renders the section's own
+   FileList columns and rows as a roomy table (optionally with rows under a
+   row) or as cards, with tick-box selection (the section's), inline
+   actions, More (the section's context menu) and a bulk bar; loading and
+   errors stay the section's. Containers: projects with their containers
+   under them, Start / Stop, Restart, Logs; bulk Start / Stop / Restart /
+   Delete. Compose: cards with Up / Stop / Logs (no bulk: compose runs one
+   project at a time). Images, volumes, networks: Delete inline and in bulk
+   (Docker's own networks disabled). Only list levels have boards; item
+   pages (a container's children, a project's services, inspect views) use
+   their Explorer content. Not virtualised.
+6. **Checks and docs.** Mock the stream in `tools/ui-check/mock-ipc.js`,
+   dashboard scenarios in both themes (overview, each board, drawer,
+   switching layout keeps the place and tabs); Vitest for any new pure
+   logic; README "Dashboard view" section with screenshots; CLAUDE.md (layout
+   decision, code layout, `board` in Shared components); changelog.
+
+### Open points
+
+- 100 concurrent stats streams is a guess; measure engine load on the WSL
+  engine and lower it if needed.
