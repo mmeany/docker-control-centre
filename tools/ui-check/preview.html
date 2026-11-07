@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <title>Docker Control Centre (mocked)</title>
     <script src="/tools/ui-check/mock-ipc.js"></script>
+    <script type="module">
+      import pkg from "/package.json";
+      window.__APP_VERSION__ = pkg.version;
+    </script>
   </head>
   <body>
     <div id="root"></div>

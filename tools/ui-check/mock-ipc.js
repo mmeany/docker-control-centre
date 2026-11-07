@@ -379,7 +379,8 @@
     invoke: async (cmd, args = {}) => {
       // Events and window APIs used by the shell (theme): accept quietly.
       if (cmd.startsWith("plugin:event|")) return cmd.endsWith("listen") ? args.handler : null;
-      if (cmd === "plugin:app|version") return "0.1.0";
+      // The version from package.json, set by run.cjs or preview.html.
+      if (cmd === "plugin:app|version") return window.__APP_VERSION__ || "unknown";
       if (cmd.startsWith("plugin:window|")) return cmd.endsWith("theme") ? (settings.theme === "light" ? "light" : "dark") : null;
       window.__calls.push([cmd, args]);
       const h = window.__mock[cmd] || handlers[cmd];

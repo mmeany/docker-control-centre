@@ -81,6 +81,7 @@ async function ensureDevServer() {
   fs.mkdirSync(OUT, { recursive: true });
   const server = await ensureDevServer();
   const mockSource = fs.readFileSync(path.join(__dirname, "mock-ipc.js"), "utf8");
+  const { version } = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"));
   const browser = await chromium.launch();
   let failures = 0;
   try {
@@ -90,7 +91,9 @@ async function ensureDevServer() {
         const errors = [];
         page.on("pageerror", (e) => errors.push(e.message));
         page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-        await page.addInitScript({ content: `window.__UI_CHECK_THEME__ = ${JSON.stringify(theme)};\n${mockSource}` });
+        await page.addInitScript({
+          content: `window.__UI_CHECK_THEME__ = ${JSON.stringify(theme)};\nwindow.__APP_VERSION__ = ${JSON.stringify(version)};\n${mockSource}`,
+        });
         await page.goto(URL);
         const shot = async (label) => {
           const file = path.join(OUT, `${name}-${label}-${theme}.png`);

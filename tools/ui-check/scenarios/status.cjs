@@ -68,4 +68,11 @@ module.exports = async (page, { shot }) => {
   const states = await page.$$eval(".legend-table tr", (r) => r.length);
   if (states !== 11) throw new Error(`legend has ${states} states`);
   await shot("legend");
+  await page.keyboard.press("Escape");
+
+  // About shows the version from package.json.
+  const { version } = require("../../../package.json");
+  await page.click(".cmd-btn:has-text('Help')");
+  await page.click(".cm-item:has-text('About Docker Control Centre')");
+  await page.waitForSelector(`.dialog:has-text('version ${version}.')`);
 };
