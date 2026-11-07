@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-07)
 
 - **Compose file:** each project has a Compose file item (beside Logs, and
   at `/compose/<project>/file`) showing the files it was started from or the
