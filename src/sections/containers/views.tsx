@@ -175,6 +175,7 @@ export function ProjectPane({ name, containers, pinned = false }: { name: string
           ["Stopped", (by("exited") + by("created") + by("dead")).toLocaleString()],
           ["Services", [...new Set(containers.map((c) => c.service).filter(Boolean))].join(", ")],
           ["Folder", <span className="mono">{dir}</span>],
+          ["Files", <span className="mono">{(containers.find((c) => c.configFiles.length)?.configFiles ?? []).join(", ")}</span>],
         ]}
       />
     </>

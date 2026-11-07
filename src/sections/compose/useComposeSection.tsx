@@ -10,14 +10,15 @@ import { CommandButton, CommandSeparator } from "../../components/CommandButton"
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
-import { ContainerIcon, DeleteIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon } from "../../components/Icons";
+import { ContainerIcon, DeleteIcon, FileIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon } from "../../components/Icons";
 import { TreeMore, TreeNote, TreeRow } from "../../components/TreeRow";
 import { partition } from "../../status/filter";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { NameList, PropsTable } from "../common";
 import { containerPath } from "../containers/paths";
 import { LogsView } from "../containers/LogsView";
-import { projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
+import { ComposeFileView } from "./ComposeFileView";
+import { fileName, projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
 import { RunDialog } from "./RunDialog";
 import { attention, containerStatus, projectStatus } from "../../status/status";
 import { SectionBadge } from "../../components/SectionBadge";
@@ -26,16 +27,21 @@ import { StatusMark } from "../../components/StatusMark";
 const SECTION = "compose";
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
+/** A project's children: merged logs and its compose files. */
+const CHILDREN = { logs: "Logs", file: "Compose file" } as const;
+type Child = keyof typeof CHILDREN;
+
 export const composePaths = {
   crumbs: (path: string) => {
     const [name, child] = path.split("/");
     if (!name) return [];
-    return [{ label: name, path: name }, ...(child === "logs" ? [{ label: "Logs", path: `${name}/logs` }] : [])];
+    const label = CHILDREN[child as Child];
+    return [{ label: name, path: name }, ...(label ? [{ label, path: `${name}/${child}` }] : [])];
   },
   parent: (path: string) => (path.includes("/") ? path.split("/")[0] : null),
   isPath: (path: string) => {
     const [name, child, ...rest] = path.split("/");
-    return NAME.test(name) && (child === undefined || child === "logs") && rest.length === 0;
+    return NAME.test(name) && (child === undefined || child in CHILDREN) && rest.length === 0;
   },
 };
 
@@ -200,6 +206,19 @@ export function useComposeSection(shell: Shell): SectionUi {
           isContainer: true,
           cells: { name: { text: "Logs", sort: "" }, state: { text: "", sort: "" }, service: { text: "Every service, merged", sort: "" }, image: { text: "", sort: "" }, status: { text: "", sort: "" }, ports: { text: "", sort: "" } },
         },
+        {
+          key: `${current.name}/file`,
+          icon: <FileIcon />,
+          isContainer: true,
+          cells: {
+            name: { text: "Compose file", sort: " " },
+            state: { text: "", sort: "" },
+            service: { text: targetOf(current).files.map(fileName).join(", ") || "Not recorded", sort: "" },
+            image: { text: "", sort: "" },
+            status: { text: "", sort: "" },
+            ports: { text: "", sort: "" },
+          },
+        },
         ...current.containers.map((c) => ({
           key: `c:${c.name}`,
           icon: <ContainerIcon />,
@@ -241,7 +260,7 @@ export function useComposeSection(shell: Shell): SectionUi {
     if (key && key.startsWith("c:")) menu.push({ label: "Open container", bold: true, onClick: () => openRow(key) }, "separator");
     else if (key && p) {
       if (!projectName) menu.push({ label: "Open", bold: true, shortcut: "Enter", onClick: () => go(p.name) }, { label: "Open in new tab", onClick: () => shell.openInNewTab({ section: SECTION, path: p.name }) });
-      menu.push({ label: "Logs", onClick: () => go(`${p.name}/logs`) }, "separator", ...verbItems(p), "separator");
+      menu.push({ label: "Logs", onClick: () => go(`${p.name}/logs`) }, { label: "Compose file", onClick: () => go(`${p.name}/file`) }, "separator", ...verbItems(p), "separator");
       menu.push(p.pinned ? { label: "Unpin", onClick: () => void unpin(p) } : { label: "Pin this project's compose file…", onClick: () => void pin() }, "separator");
     } else menu.push({ label: "Pin a compose file…", onClick: () => void pin() }, "separator");
     menu.push({ label: "Refresh", shortcut: "F5", onClick: refresh });
@@ -257,6 +276,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       <CommandButton icon={<DeleteIcon />} label="Down…" title="docker compose down" disabled={!target || target.containers.length === 0} onClick={() => target && void down(target)} />
       <CommandSeparator />
       <CommandButton icon={<LogsIcon />} label="Logs" title="Every service's logs, merged" disabled={!target || target.containers.length === 0} onClick={() => target && go(`${target.name}/logs`)} />
+      <CommandButton icon={<FileIcon />} label="File" title="The project's compose files, and the resolved config" disabled={!target} onClick={() => target && go(`${target.name}/file`)} />
       <CommandButton icon={<NewItemIcon />} label="Pin file…" title="Pin a compose file so its project shows while it's down" onClick={() => void pin()} />
       <CommandSeparator />
       <CommandButton icon={<RefreshIcon />} label="Refresh" title="Refresh (F5)" onClick={refresh} />
@@ -345,6 +365,10 @@ export function useComposeSection(shell: Shell): SectionUi {
           />
         );
       status = `${current.name} · Logs from ${current.containers.length} containers`;
+    } else if (child === "file") {
+      const t = targetOf(current);
+      content = <ComposeFileView key={`${current.name}:${t.files.join("|")}`} target={t} shown={shown} shell={shell} />;
+      status = `${current.name} · ${t.files.length === 1 ? "1 compose file" : `${t.files.length} compose files`}`;
     } else {
       content = (
         <FileList

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Compose file:** each project has a Compose file item (beside Logs, and
+  at `/compose/<project>/file`) showing the files it was started from or the
+  pinned file: read-only, one tab per file, with line numbers, Copy path,
+  Show in folder and Open in editor. Files inside WSL are read through
+  `\\wsl.localhost\<distro>`. A Resolved tab runs `docker compose config`
+  only when asked, since it fills in values from .env files, and Hide drops
+  it. A file that has gone says so.
+- The Containers project menu links to the Compose file, and its details
+  pane lists the files.
+
 ## 0.3.0 (2026-11-06)
 
 - **Tree filtering:** the tree shows running items and problems by default.

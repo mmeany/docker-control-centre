@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ContainerItem } from "../../api/engine";
-import { colourOf, parentDir, projectsFrom, projectState, targetOf, windowsPath } from "./projects";
+import { colourOf, fileName, parentDir, yamlTokens, projectsFrom, projectState, targetOf, windowsPath } from "./projects";
 
 const c = (name: string, project: string | null, state = "running", extra: Partial<ContainerItem> = {}) =>
   ({ name, project, state, workingDir: project ? `/home/mark/${project}` : null, configFiles: project ? [`/home/mark/${project}/compose.yml`] : [], ...extra }) as ContainerItem;
@@ -34,6 +34,23 @@ describe("compose projects", () => {
     expect(windowsPath("/home/mark/app", "Ubuntu-Dev")).toBe("\\\\wsl.localhost\\Ubuntu-Dev\\home\\mark\\app");
     expect(windowsPath("C:\\x", "Ubuntu-Dev")).toBe("C:\\x");
     expect(parentDir("/compose.yml")).toBe("/");
+  });
+
+  it("names files", () => {
+    expect(fileName("/home/mark/shop/compose.yml")).toBe("compose.yml");
+    expect(fileName("E:\\shop\\compose.override.yml")).toBe("compose.override.yml");
+  });
+
+  it("picks out YAML keys and comments", () => {
+    const kinds = (l: string) => yamlTokens(l).map((t) => `${t.kind}:${t.text}`);
+    expect(kinds("services:")).toEqual(["key:services", "text::"]);
+    expect(kinds("    image: nginx:1.27 # pinned")).toEqual(["text:    ", "key:image", "text:: nginx:1.27 ", "comment:# pinned"]);
+    expect(kinds("  - PORT=8080")).toEqual(["text:  - PORT=8080"]);
+    expect(kinds("  - name: web")).toEqual(["text:  - ", "key:name", "text:: web"]);
+    expect(kinds('    command: "echo #not a comment"')).toEqual(["text:    ", "key:command", 'text:: "echo #not a comment"']);
+    expect(kinds("# top")).toEqual(["comment:# top"]);
+    expect(kinds("  url: http://x/#frag")).toEqual(["text:  ", "key:url", "text:: http://x/#frag"]);
+    expect(kinds("")).toEqual([]);
   });
 
   it("gives each service a stable colour", () => {

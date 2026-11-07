@@ -64,6 +64,43 @@ export function windowsPath(p: string, distro: string): string {
   return p;
 }
 
+/** The last part of a path (either slash). */
+export function fileName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+export interface YamlToken {
+  kind: "text" | "key" | "comment";
+  text: string;
+}
+
+/** Splits a YAML line into its key, comment and the rest, for colouring. */
+export function yamlTokens(line: string): YamlToken[] {
+  const out: YamlToken[] = [];
+  const m = /^(\s*(?:-\s+)?)([^\s#'"{[][^:#]*?|"[^"]*"|'[^']*')(:)(?=\s|$)/.exec(line);
+  let rest = line;
+  if (m) {
+    if (m[1]) out.push({ kind: "text", text: m[1] });
+    out.push({ kind: "key", text: m[2] });
+    rest = line.slice(m[1].length + m[2].length);
+  }
+  // A comment starts at a # that begins the line or follows a space, outside quotes.
+  let quote = "";
+  for (let i = 0; i < rest.length; i++) {
+    const ch = rest[i];
+    if (quote) {
+      if (ch === quote) quote = "";
+    } else if ((ch === '"' || ch === "'") && (i === 0 || /[\s:[{,-]/.test(rest[i - 1]))) quote = ch;
+    else if (ch === "#" && (i === 0 || /\s/.test(rest[i - 1]))) {
+      if (i > 0) out.push({ kind: "text", text: rest.slice(0, i) });
+      out.push({ kind: "comment", text: rest.slice(i) });
+      return out;
+    }
+  }
+  if (rest) out.push({ kind: "text", text: rest });
+  return out;
+}
+
 const SERVICE_COLOURS = 8;
 /** A stable colour slot (0-7) per service name, for merged logs. */
 export function colourOf(name: string): number {

@@ -43,7 +43,11 @@ milestones.
   run (`compose::verb_args`). Paths convert both ways (`E:\x` <-> `/mnt/e/x`,
   `\\wsl.localhost\<distro>\…`). wsl.exe's own messages are UTF-16LE
   (`decode_output`). Projects come from container labels plus pinned compose
-  files (settings `compose.pinned`, named by `compose config`).
+  files (settings `compose.pinned`, named by `compose config`). Compose files
+  are read in Rust (`compose_read_file`, 1 MB cap; WSL paths through
+  `compose::readable_path`) and shown read-only; only .yml / .yaml files are
+  handed to Explorer (`compose_show_file`). The resolved config
+  (`config-yaml`) can hold .env secrets: fetched on request, never kept.
 
 ## Dependency policy
 
@@ -76,7 +80,8 @@ src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
 src/sections/images/, volumes/, networks/   one-level sections (list + item detail)
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
-                            RunDialog (streamed output), the section
+                            RunDialog (streamed output), ComposeFileView (files + resolved),
+                            the section
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/status/                 status.ts: one state model for containers, projects, images,
                             volumes, networks (unit-tested); LegendDialog
@@ -104,7 +109,7 @@ src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats channels; pop-out
 src/api/resources.ts        images (pull channel), volumes, networks
 src/api/files.ts            container folders, copy out / in
-src/api/compose.ts          compose runs (channel), pinned files, WSL distros
+src/api/compose.ts          compose runs (channel), pinned files, WSL distros, compose files
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
@@ -124,7 +129,8 @@ src-tauri/src/tar.rs        streaming tar reader (GNU long names, pax paths) and
 src-tauri/src/container_files.rs  list (exec sh script, archive fallback), copy out / in
 src-tauri/src/commands/files.rs   list_container_dir, copy_from_container, copy_into_container
 src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, verbs (unit-tested)
-src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, save_text_file
+src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, read / show
+                            compose files, save_text_file
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
 src-tauri/src/commands/resources.rs  list, inspect, remove (per-item results), pull
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
@@ -281,3 +287,7 @@ Details in `PLAN.md`.)
    and problems by default; a Show control (Running, Running and stopped,
    Everything) relaxes it; "+ n more" rows reveal a branch; main lists
    unfiltered; the open item always shows; level remembered app-wide.
+10. ✅ Compose file (see PLAN.md, M10): each project's compose files shown
+    read-only at `/compose/<project>/file`, a tab per file, Copy path / Show
+    in folder / Open in editor, and a Resolved tab (`docker compose config`)
+    fetched only on request.

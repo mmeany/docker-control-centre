@@ -32,6 +32,13 @@ export interface Distro {
   version: number;
 }
 
+export interface ComposeFile {
+  /** Where it was read from (a Windows path on Windows). */
+  path: string;
+  text: string;
+  size: number;
+}
+
 /** Settings keys (values). */
 export const COMPOSE_MODE_KEY = "compose.mode";
 export const COMPOSE_DISTRO_KEY = "compose.distro";
@@ -49,6 +56,12 @@ export const composeApi = {
   },
   /** `docker compose version` with the current settings. */
   version: () => call<ComposeOutput>("compose_check", { target: null, verb: "version" }),
+  /** `docker compose config` as YAML: the merged file with variables filled in (may hold secrets). */
+  resolved: (target: ComposeTarget) => call<ComposeOutput>("compose_check", { target, verb: "config-yaml" }),
+  /** A project's compose file (an engine-side or Windows path), up to 1 MB. */
+  readFile: (path: string) => call<ComposeFile>("compose_read_file", { path }),
+  /** Shows the file in Explorer ("folder") or opens it in its default app ("open"). */
+  showFile: (path: string, how: "folder" | "open") => call<void>("compose_show_file", { path, how }),
   distros: () => call<Distro[]>("wsl_distros"),
   pinned: () => call<Pinned[]>("compose_pinned"),
   pin: (file: string) => call<Pinned[]>("compose_pin", { file }),

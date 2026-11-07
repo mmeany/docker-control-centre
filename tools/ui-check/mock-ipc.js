@@ -49,7 +49,9 @@
     project: opts.project ?? null,
     service: opts.service ?? null,
     workingDir: opts.project ? `/home/mark/projects/${opts.project}` : null,
-    configFiles: opts.project ? [`/home/mark/projects/${opts.project}/compose.yml`] : [],
+    configFiles: opts.project
+      ? [`/home/mark/projects/${opts.project}/compose.yml`, ...(opts.project === "shop" ? ["/home/mark/projects/shop/compose.override.yml"] : [])]
+      : [],
     imageId: imageIdOf(image),
     exitCode: /^Exited \((\d+)\)/.test(status) ? Number(/^Exited \((\d+)\)/.exec(status)[1]) : null,
     health: opts.health ?? "",
@@ -312,7 +314,20 @@
       return pinned;
     },
     compose_unpin: (a) => (pinned = pinned.filter((p) => p.name !== a.name)),
-    compose_check: () => ({ code: 0, stdout: "Docker Compose version v2.40.3\n", stderr: "" }),
+    compose_check: (a) =>
+      a.verb === "config-yaml"
+        ? { code: 0, stdout: `name: ${a.target.name}\nservices:\n  api:\n    environment:\n      DB_PASSWORD: s3cret-from-env\n    image: node:22-bookworm-slim\n`, stderr: "" }
+        : { code: 0, stdout: "Docker Compose version v2.40.3\n", stderr: "" },
+    // The pinned blog's file has gone, to show the error.
+    compose_read_file: (a) => {
+      if (a.path.includes("blog")) throw { kind: "notFound", message: `${a.path} doesn't exist.`, detail: "" };
+      const local = a.path.startsWith("/") ? "\\\\wsl.localhost\\Ubuntu-Dev" + a.path.split("/").join("\\") : a.path;
+      const text = a.path.endsWith("override.yml")
+        ? 'services:\n  api:\n    ports:\n      - "3000:3000" # dev only\n'
+        : '# Shop: web, api and a worker\nservices:\n  web:\n    image: nginx:1.27\n    ports:\n      - "8080:80"\n  api:\n    image: node:22-bookworm-slim\n    environment:\n      DB_PASSWORD: ${DB_PASSWORD}\n  worker:\n    image: node:22-bookworm-slim\n    command: ["node", "worker.js"]\n';
+      return { path: local, text, size: text.length };
+    },
+    compose_show_file: () => null,
     save_text_file: () => null,
     compose_run: (a) => {
       const id = ++streamId;

@@ -373,6 +373,10 @@ export function useContainersSection(shell: Shell): SectionUi {
           const popOut = shell.popOut;
           menu.push({ label: "Open in new window", onClick: () => popOut(placeOf(key)) });
         }
+        if (l?.kind === "project") {
+          const project = l.project;
+          menu.push({ label: "Compose file", onClick: () => shell.navigate({ section: "compose", path: `${project}/file` }) });
+        }
         if (l?.kind !== "child") menu.push("separator");
       }
       const verbs = verbItems(list);

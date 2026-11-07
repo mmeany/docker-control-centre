@@ -185,6 +185,8 @@ pub fn verb_args(verb: &str) -> Result<Vec<&'static str>, AppError> {
         "pull" => vec!["pull"],
         "config" => vec!["config", "--format", "json"],
         "validate" => vec!["config", "--quiet"],
+        // The merged file as YAML, with variables filled in.
+        "config-yaml" => vec!["config"],
         "version" => vec!["version"],
         _ => {
             return Err(AppError::invalid(format!(
@@ -263,6 +265,35 @@ pub fn default_project_name(dir: &str) -> String {
         .collect()
 }
 
+/// The biggest compose file the app will show.
+pub const MAX_FILE_BYTES: u64 = 1024 * 1024;
+
+/// Where this machine can read a project's file from. On Windows, `/mnt/<drive>`
+/// is the drive itself and other Linux paths are read through
+/// `\\wsl.localhost\<distro>\…`; elsewhere Linux paths are read as they are.
+pub fn readable_path(p: &str, distro: Option<&str>, windows: bool) -> Result<String, AppError> {
+    let p = p.trim();
+    if !windows || !p.starts_with('/') {
+        return Ok(p.to_string());
+    }
+    let on_drive = to_windows_path(p, "");
+    if !on_drive.starts_with('/') {
+        return Ok(on_drive);
+    }
+    match distro.filter(|d| !d.is_empty()) {
+        Some(d) => Ok(to_windows_path(p, d)),
+        None => Err(AppError::invalid(format!(
+            "{p} is inside WSL, and there's no WSL distro to read it from. Choose one in Settings."
+        ))),
+    }
+}
+
+/// Whether a path looks like a compose file: the only files the app opens.
+pub fn is_compose_file(p: &str) -> bool {
+    let lower = p.to_ascii_lowercase();
+    lower.ends_with(".yml") || lower.ends_with(".yaml")
+}
+
 /// A compose file the user pinned, so the project shows while it's down.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -286,6 +317,36 @@ pub fn parent_dir(file: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn finds_readable_paths() {
+        assert_eq!(
+            readable_path("/mnt/e/shop/compose.yml", None, true).unwrap(),
+            r"E:\shop\compose.yml"
+        );
+        assert_eq!(
+            readable_path("/home/mark/app/compose.yml", Some("Ubuntu-Dev"), true).unwrap(),
+            r"\\wsl.localhost\Ubuntu-Dev\home\mark\app\compose.yml"
+        );
+        assert!(readable_path("/home/mark/app/compose.yml", None, true).is_err());
+        assert!(readable_path("/home/mark/app/compose.yml", Some(""), true).is_err());
+        assert_eq!(
+            readable_path(r"E:\shop\compose.yml", None, true).unwrap(),
+            r"E:\shop\compose.yml"
+        );
+        assert_eq!(
+            readable_path("/home/mark/compose.yml", None, false).unwrap(),
+            "/home/mark/compose.yml"
+        );
+    }
+
+    #[test]
+    fn only_opens_compose_files() {
+        assert!(is_compose_file(r"E:\shop\compose.yml"));
+        assert!(is_compose_file("/x/docker-compose.override.YAML"));
+        assert!(!is_compose_file(r"E:\shop\run.exe"));
+        assert!(!is_compose_file("/x/.env"));
+    }
 
     #[test]
     fn converts_paths_to_wsl() {

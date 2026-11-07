@@ -25,7 +25,9 @@ Rust.
 - **Compose:** running projects, plus compose files you pin so a project
   stays listed while it's down. Up, stop, restart, pull and down (deleting
   volumes needs the project name typed), with compose's output as it runs,
-  and every service's logs merged in time order.
+  and every service's logs merged in time order. Each project's Compose
+  file shows the files it was started from (read-only, one tab each, with
+  Show in folder and Open in editor) and, on request, the resolved config.
 - **Images:** pull with per-layer progress, inspect (config, history, which
   containers use it), delete, and prune with a preview of exactly what goes.
 - **Volumes:** which containers use each, delete (type the name to confirm:

@@ -277,3 +277,21 @@ always agree.
      choice is restored after a reload.
 5. **Docs:** README (the tree section), CHANGELOG (Unreleased) and
    CLAUDE.md.
+
+## M10: Compose file (agreed 2026-11-07)
+
+Show where a stack came from and what it says.
+
+- A **Compose file** item in each project, beside Logs, at
+  `/compose/<project>/file`. It shows the files from the containers' labels,
+  or the pinned file when there is one (what the app runs against).
+- Read-only, one tab per file, line numbers, YAML keys and comments
+  coloured. Copy path, Show in folder, Open in editor (the default app;
+  only .yml / .yaml files that exist).
+- Read in Rust with a 1 MB cap; WSL paths go through
+  `\\wsl.localhost\<distro>` (the chosen distro, else WSL's default).
+- **Resolved** tab: `docker compose config` through the usual runner. It
+  fills in values from .env files, so it runs only when asked and Hide or
+  leaving drops it.
+- A missing file says it may have moved or been deleted.
+- Containers: the project menu links to it; the details pane lists files.

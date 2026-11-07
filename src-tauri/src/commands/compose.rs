@@ -172,7 +172,10 @@ pub async fn compose_check(
     target: Option<Target>,
     verb: String,
 ) -> Result<Output, AppError> {
-    if !matches!(verb.as_str(), "version" | "validate" | "config") {
+    if !matches!(
+        verb.as_str(),
+        "version" | "validate" | "config" | "config-yaml"
+    ) {
         return Err(AppError::invalid(
             "Only version, validate and config run this way.",
         ));
@@ -191,6 +194,137 @@ pub async fn wsl_distros() -> Result<Vec<Distro>, AppError> {
         .await
         .map_err(|e| spawn_error("wsl.exe", e))?;
     Ok(compose::parse_distros(&compose::decode_output(&out.stdout)))
+}
+
+/// The distro WSL paths are read from: the one in Settings, else WSL's default.
+async fn read_distro(state: &AppState) -> Option<String> {
+    let chosen = state
+        .settings
+        .load()
+        .values
+        .get(compose::DISTRO_KEY)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    if chosen.is_some() {
+        return chosen;
+    }
+    wsl_distros()
+        .await
+        .ok()?
+        .into_iter()
+        .find(|d| d.default)
+        .map(|d| d.name)
+}
+
+async fn local_path(state: &AppState, path: &str) -> Result<String, AppError> {
+    let distro = if cfg!(windows) && path.trim().starts_with('/') {
+        read_distro(state).await
+    } else {
+        None
+    };
+    compose::readable_path(path, distro.as_deref(), cfg!(windows))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposeFile {
+    /// Where it was read from (a Windows path on Windows).
+    pub path: String,
+    pub text: String,
+    pub size: u64,
+}
+
+/// Reads a project's compose file (engine-side or Windows path) to show it.
+#[tauri::command]
+pub async fn compose_read_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<ComposeFile, AppError> {
+    let local = local_path(&state, &path).await?;
+    let meta = tokio::fs::metadata(&local)
+        .await
+        .map_err(|e| AppError::io(e, &local))?;
+    if !meta.is_file() {
+        return Err(AppError::invalid(format!("{local} isn't a file.")));
+    }
+    if meta.len() > compose::MAX_FILE_BYTES {
+        return Err(AppError::invalid(format!(
+            "{local} is {} KB; files over {} KB aren't shown.",
+            meta.len() / 1024,
+            compose::MAX_FILE_BYTES / 1024
+        )));
+    }
+    let bytes = tokio::fs::read(&local)
+        .await
+        .map_err(|e| AppError::io(e, &local))?;
+    Ok(ComposeFile {
+        path: local,
+        size: bytes.len() as u64,
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+    })
+}
+
+/// Shows a compose file in the file manager (`folder`) or opens it in its
+/// default app (`open`). Only .yml / .yaml files that exist.
+#[tauri::command]
+pub async fn compose_show_file(
+    state: State<'_, AppState>,
+    path: String,
+    how: String,
+) -> Result<(), AppError> {
+    let local = local_path(&state, &path).await?;
+    if !compose::is_compose_file(&local) {
+        return Err(AppError::invalid(format!("{local} isn't a compose file.")));
+    }
+    let meta = tokio::fs::metadata(&local)
+        .await
+        .map_err(|e| AppError::io(e, &local))?;
+    if !meta.is_file() {
+        return Err(AppError::invalid(format!("{local} isn't a file.")));
+    }
+    let folder = match how.as_str() {
+        "folder" => true,
+        "open" => false,
+        _ => return Err(AppError::invalid("Show the folder or open the file.")),
+    };
+    let mut c = std::process::Command::new(if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    });
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Explorer wants /select,"path" as one argument, quoted its own way.
+        // Windows paths can't contain quotes.
+        if folder {
+            c.raw_arg(format!("/select,\"{local}\""));
+        } else {
+            c.raw_arg(format!("\"{local}\""));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if folder && cfg!(target_os = "macos") {
+            c.arg("-R").arg(&local);
+        } else if folder {
+            c.arg(compose::parent_dir(&local));
+        } else {
+            c.arg(&local);
+        }
+    }
+    // Explorer's exit code means nothing, so only a failure to start counts.
+    c.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = c
+        .spawn()
+        .map_err(|e| AppError::from(format!("Couldn't open {local}: {e}")))?;
+    std::thread::spawn(move || child.wait());
+    Ok(())
 }
 
 fn pinned_list(state: &AppState) -> Vec<Pinned> {
@@ -274,6 +408,77 @@ mod integration {
     use super::*;
     use crate::engine::{container_item, Engine, LABEL_PROJECT};
     use bollard::query_parameters::ListContainersOptionsBuilder;
+
+    /// A compose file inside WSL reads through \\wsl.localhost, and the
+    /// resolved config fills in a variable from .env.
+    #[tokio::test]
+    async fn reads_a_file_inside_wsl() {
+        let distro = wsl_distros()
+            .await
+            .expect("distros")
+            .into_iter()
+            .find(|d| d.default)
+            .expect("a default WSL distro")
+            .name;
+        let dir = format!("/tmp/dcc-read-{}", std::process::id());
+        let script = format!(
+            "mkdir -p {dir} && printf 'services:\\n  app:\\n    image: busybox\\n    environment:\\n      GREETING: ${{GREETING}}\\n' > {dir}/compose.yml && printf 'GREETING=hello-from-env\\n' > {dir}/.env"
+        );
+        let made = command(
+            "wsl.exe",
+            &[
+                "-d".into(),
+                distro.clone(),
+                // --exec: no login shell in between to expand ${GREETING}.
+                "--exec".into(),
+                "sh".into(),
+                "-c".into(),
+                script,
+            ],
+            None,
+        )
+        .output()
+        .await
+        .expect("wsl");
+        assert!(made.status.success(), "{made:?}");
+
+        let file = format!("{dir}/compose.yml");
+        let local = compose::readable_path(&file, Some(&distro), true).unwrap();
+        assert!(local.starts_with(r"\\wsl.localhost\"), "{local}");
+        let text = tokio::fs::read_to_string(&local)
+            .await
+            .expect("read through wsl.localhost");
+        assert!(text.contains("${GREETING}"), "{text}");
+
+        let runner = Runner::Wsl {
+            distro: Some(distro.clone()),
+        };
+        let target = Target {
+            name: Some("dcc-read".into()),
+            dir: dir.clone(),
+            files: vec![file],
+        };
+        let out = run_once(&runner, &target, "config-yaml")
+            .await
+            .expect("config");
+        assert_eq!(out.code, Some(0), "{out:?}");
+        assert!(out.stdout.contains("hello-from-env"), "{}", out.stdout);
+
+        let _ = command(
+            "wsl.exe",
+            &[
+                "-d".into(),
+                distro,
+                "--".into(),
+                "rm".into(),
+                "-rf".into(),
+                dir,
+            ],
+            None,
+        )
+        .output()
+        .await;
+    }
 
     #[tokio::test]
     async fn up_and_down_through_wsl() {

@@ -69,6 +69,8 @@ pub fn run() {
             commands::compose::compose_pinned,
             commands::compose::compose_pin,
             commands::compose::compose_unpin,
+            commands::compose::compose_read_file,
+            commands::compose::compose_show_file,
             commands::compose::save_text_file,
             commands::resources::list_images,
             commands::resources::inspect_image,

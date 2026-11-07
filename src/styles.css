@@ -57,6 +57,8 @@
   --term-fg: #1b1b1b;
   --log-err: #b3261e;
   --log-time: #6b6b6b;
+  --code-key: #0550ae;
+  --code-comment: #5f7f5f;
   --log-hit: #ffe08a;
   --log-current: #ffb84d;
   --spark: #0078d7;
@@ -131,6 +133,8 @@
   --term-fg: #e4e4e4;
   --log-err: #ff7b72;
   --log-time: #8b949e;
+  --code-key: #79c0ff;
+  --code-comment: #8fb58f;
   --log-hit: #6b5a12;
   --log-current: #9e6a03;
   --spark: #4aa3f0;
@@ -298,7 +302,8 @@ button { font: inherit; color: inherit; }
 
 /* ---------- Buttons, dialogs ---------- */
 .btn { min-width: 76px; height: 24px; padding: 0 12px; border: 1px solid var(--btn-border); background: var(--btn-bg); border-radius: 2px; }
-.btn:hover { background: var(--btn-hover); border-color: var(--focus); }
+.btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--focus); }
+.btn:disabled { color: var(--disabled); }
 .btn.primary { border-color: var(--focus); }
 
 .modal-backdrop { position: fixed; inset: 0; background: var(--backdrop); display: flex; align-items: center; justify-content: center; z-index: 10; }
@@ -516,6 +521,16 @@ button { font: inherit; color: inherit; }
 .log-time { color: var(--log-time); margin-right: 10px; }
 .log-line mark { background: var(--log-hit); color: inherit; }
 .log-line.current mark { background: var(--log-current); }
+/* ---------- Compose file ---------- */
+.compose-file-view .filter-bar > .segmented, .compose-file-view .filter-bar > .btn { flex-shrink: 0; white-space: nowrap; }
+.compose-file-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); user-select: text; }
+.compose-file-view .segmented button { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-view { flex: 1; min-height: 0; overflow: auto; background: var(--term-bg); color: var(--term-fg); outline: none; padding: 4px 0; }
+.code-view table { border-collapse: collapse; font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 12px; line-height: 18px; }
+.code-num { padding: 0 12px 0 10px; text-align: right; color: var(--log-time); user-select: none; vertical-align: top; }
+.code-line { padding-right: 16px; white-space: pre; user-select: text; }
+.code-key { color: var(--code-key); }
+.code-comment { color: var(--code-comment); font-style: italic; }
 .logs-footer { padding: 4px 10px; border-top: 1px solid var(--border-light); color: var(--muted); background: var(--panel-bg); }
 
 /* ---------- Terminal ---------- */
