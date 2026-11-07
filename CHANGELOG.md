@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-11-07)
 
 - **Dashboard layout:** a second layout beside Explorer, chosen in Settings
   or with the Dashboard / Explorer button in either layout. It switches
