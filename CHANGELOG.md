@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Drop to start:** drag a compose file, or a folder holding one, from
+  Explorer onto the window (anywhere but a container's Files, which still
+  copies in) to start its project. A confirm lists the files with tick
+  boxes in `-f` order: the base file and its override ticked, variants such
+  as `compose-dev.yml` or `docker-compose.prod.yaml` not. It shows the
+  project name compose gives them, says if compose can't read them, and
+  warns when the project is already running or pinned from other files.
+  Start pins the files and runs up; closing the output opens the project.
+  Several folders are confirmed in turn. Folders WSL can't reach (network
+  shares) are refused before anything runs.
+- Pins hold a project's list of files (older single-file pins still load).
+
 ## 0.5.0 (2026-11-07)
 
 - **Dashboard layout:** a second layout beside Explorer, chosen in Settings

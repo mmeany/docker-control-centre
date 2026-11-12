@@ -5,7 +5,6 @@ import { appApi } from "../../api/app";
 import type { AppError } from "../../api/core";
 import type { ContainerItem } from "../../api/engine";
 import { filesApi, type FileEntry, type Listing } from "../../api/files";
-import { onFileDrop } from "../../api/window";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
 import { FileIcon, FolderIcon } from "../../components/Icons";
@@ -83,10 +82,11 @@ export function FilesView({ container, dir, shell, openDir }: Props) {
     }
   }
 
-  // Files dragged in from Explorer.
+  // Files dragged in from Explorer: claimed from the shell while this shows,
+  // so they're copied in rather than started as compose projects.
   useEffect(
     () =>
-      onFileDrop({
+      shell.claimDrops({
         over: () => setDropping(true),
         leave: () => setDropping(false),
         drop: (paths) => {

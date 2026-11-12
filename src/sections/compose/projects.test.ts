@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ContainerItem } from "../../api/engine";
-import { colourOf, fileName, parentDir, yamlTokens, projectsFrom, projectState, targetOf, windowsPath } from "./projects";
+import { colourOf, fileName, parentDir, pinnedLabel, yamlTokens, projectsFrom, projectState, targetOf, windowsPath } from "./projects";
 
 const c = (name: string, project: string | null, state = "running", extra: Partial<ContainerItem> = {}) =>
   ({ name, project, state, workingDir: project ? `/home/mark/${project}` : null, configFiles: project ? [`/home/mark/${project}/compose.yml`] : [], ...extra }) as ContainerItem;
@@ -10,8 +10,8 @@ describe("compose projects", () => {
     const ps = projectsFrom(
       [c("shop-web-1", "shop"), c("shop-db-1", "shop", "exited"), c("solo", null)],
       [
-        { name: "shop", file: "E:\\shop\\compose.yml" },
-        { name: "blog", file: "E:\\blog\\compose.yml" },
+        { name: "shop", files: ["E:\\shop\\compose.yml"] },
+        { name: "blog", files: ["E:\\blog\\compose.yml", "E:\\blog\\compose.override.yml"] },
       ],
     );
     expect(ps.map((p) => [p.name, projectState(p)])).toEqual([
@@ -21,7 +21,9 @@ describe("compose projects", () => {
     // Pinned wins for where to run; labels give it otherwise.
     expect(targetOf(ps[1])).toEqual({ name: "shop", dir: "E:\\shop", files: ["E:\\shop\\compose.yml"] });
     expect(targetOf({ ...ps[1], pinned: null })).toEqual({ name: "shop", dir: "/home/mark/shop", files: ["/home/mark/shop/compose.yml"] });
-    expect(targetOf(ps[0]).dir).toBe("E:\\blog");
+    expect(targetOf(ps[0])).toEqual({ name: "blog", dir: "E:\\blog", files: ["E:\\blog\\compose.yml", "E:\\blog\\compose.override.yml"] });
+    expect(pinnedLabel(ps[0].pinned!)).toBe("E:\\blog\\compose.yml (+1 more)");
+    expect(pinnedLabel(ps[1].pinned!)).toBe("E:\\shop\\compose.yml");
   });
 
   it("describes state", () => {

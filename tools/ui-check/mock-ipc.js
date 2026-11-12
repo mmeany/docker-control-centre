@@ -83,7 +83,9 @@
     "/usr": [],
     "/var": [],
   };
-  let pinned = [{ name: "blog", file: "E:\\projects\\blog\\compose.yml" }];
+  let pinned = [{ name: "blog", files: ["E:\\projects\\blog\\compose.yml"] }];
+  /** The project compose would name a file's folder. */
+  const folderName = (file) => file.split(/[\\/]/).slice(-2, -1)[0].toLowerCase();
   const timers = {};
   const terminals = {};
   const channelIndex = {};
@@ -350,9 +352,47 @@
     ],
     compose_pinned: () => pinned,
     compose_pin: (a) => {
-      const name = a.file.split(/[\\/]/).slice(-2, -1)[0].toLowerCase();
-      pinned = [...pinned.filter((p) => p.name !== name), { name, file: a.file }];
+      const name = folderName(a.files[0]);
+      pinned = [...pinned.filter((p) => p.name !== name), { name, files: a.files }].sort((x, y) => x.name.localeCompare(y.name));
       return pinned;
+    },
+    compose_project_name: (a) => {
+      if (a.files.some((f) => f.includes("broken"))) throw { kind: "invalid", message: `Compose couldn't read these ${a.files.length} files: yaml: line 1: did not find expected node content`, detail: "" };
+      return folderName(a.files[0]);
+    },
+    // A .yml is a dropped file (an override sits beside a base file); a path
+    // with "nas" is a network share WSL can't reach; another name with an
+    // extension isn't compose; anything else is a folder holding a base file,
+    // its override and two variants.
+    compose_drop_candidates: (a) => {
+      const groups = [];
+      const files = {};
+      for (const p of a.paths) {
+        if (/\.ya?ml$/i.test(p)) {
+          const dir = p.slice(0, Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/")));
+          (files[dir] = files[dir] || []).push(p);
+        } else if (p.includes("nas")) groups.push({ dir: p, candidates: [], error: `WSL can't open ${p}. Compose runs in WSL (Settings), which reaches local drives and WSL folders, not network shares.` });
+        else if (/\.\w+$/.test(p)) continue;
+        else
+          groups.push({
+            dir: p,
+            error: null,
+            candidates: [
+              { path: `${p}\\compose.yml`, role: "base", ticked: true },
+              { path: `${p}\\compose.override.yml`, role: "override", ticked: true },
+              { path: `${p}\\compose-broken.yml`, role: "variant", ticked: false },
+              { path: `${p}\\compose-dev.yml`, role: "variant", ticked: false },
+            ],
+          });
+      }
+      for (const [dir, list] of Object.entries(files)) {
+        const base = list.find((f) => /[\\/](docker-)?compose\.ya?ml$/i.test(f));
+        const cands = list.map((f) => ({ path: f, role: f === base ? "base" : "variant", ticked: true }));
+        if (base) cands.splice(1, 0, { path: `${dir}\\compose.override.yml`, role: "override", ticked: true });
+        groups.push({ dir, candidates: cands, error: null });
+      }
+      if (groups.length === 0) throw { kind: "invalid", message: "Drop a compose file (.yml or .yaml), or a folder with one.", detail: "" };
+      return groups;
     },
     compose_unpin: (a) => (pinned = pinned.filter((p) => p.name !== a.name)),
     compose_check: (a) =>
@@ -408,6 +448,20 @@
   let nextId = 1;
   /** Delivers a message on the engine channel, as Rust would. */
   window.__engine = (message) => engineChannel && callbacks[engineChannel.id]?.({ index: engineIndex++, message });
+  // Tauri events the page listens to (drag and drop), by event name.
+  const listeners = {};
+  const fire = (event, payload) => (listeners[event] || []).forEach((id) => callbacks[id]?.({ event, id, payload }));
+  /** Files dragged over the window from Explorer, at CSS (x, y). */
+  window.__dragOver = (paths, x = 400, y = 300) => {
+    fire("tauri://drag-enter", { paths, position: { x, y } });
+    fire("tauri://drag-over", { paths, position: { x, y } });
+  };
+  window.__dragLeave = () => fire("tauri://drag-leave", null);
+  /** Files dropped on the window from Explorer, as the OS would. */
+  window.__drop = (paths, x = 400, y = 300) => {
+    window.__dragOver(paths, x, y);
+    fire("tauri://drag-drop", { paths, position: { x, y } });
+  };
   window.__containers = containers;
   window.__TAURI_INTERNALS__ = {
     metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main", windowLabel: "main" } },
@@ -419,7 +473,15 @@
     unregisterCallback: (id) => delete callbacks[id],
     invoke: async (cmd, args = {}) => {
       // Events and window APIs used by the shell (theme): accept quietly.
-      if (cmd.startsWith("plugin:event|")) return cmd.endsWith("listen") ? args.handler : null;
+      if (cmd === "plugin:event|listen") {
+        (listeners[args.event] = listeners[args.event] || []).push(args.handler);
+        return args.handler;
+      }
+      if (cmd === "plugin:event|unlisten") {
+        listeners[args.event] = (listeners[args.event] || []).filter((id) => id !== args.eventId);
+        return null;
+      }
+      if (cmd.startsWith("plugin:event|")) return null;
       // The version from package.json, set by run.cjs or preview.html.
       if (cmd === "plugin:app|version") return window.__APP_VERSION__ || "unknown";
       if (cmd.startsWith("plugin:window|")) return cmd.endsWith("theme") ? (settings.theme === "light" ? "light" : "dark") : null;

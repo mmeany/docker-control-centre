@@ -367,3 +367,37 @@ commit at the end.
 
 - 100 concurrent stats streams is a guess; measure engine load on the WSL
   engine and lower it if needed.
+
+## M12: Drop a compose file to start it (agreed 2026-11-12)
+
+Drag a compose file or folder from Explorer onto the window to bring its
+project up.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| Where | Anywhere in either layout, except container Files, which keeps copy-in. The window has one OS drop listener (in the shell); a mounted view can claim drops (`shell.claimDrops`, latest claim wins), otherwise a section's `fileDrop` takes them (compose). Drops while a dialog is open are ignored. An overlay says what a drop does |
+| On drop | Confirm, then up: compose reads the ticked files (`compose config`; only the name comes back to the UI) and names the project; Start pins and runs the existing `up` in the Run dialog |
+| Pinning | Always: a drop means "add this project" |
+| Several files | Files from one folder are one project (all as `-f`); separate folders are separate projects, confirmed in turn (Skip / Cancel) |
+| Folders | Compose's default names (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, in that order), their `.override` files, and variants `compose-*` / `docker-compose-*` (also `.`-separated), .yml or .yaml. Nothing matching: say so |
+| Which files | A tick list in -f order: base, override, variants by name. Base and override ticked, variants not; with no base, a lone file is ticked |
+| Override | A dropped base file also gets its override from the same folder, ticked (explicit `-f` stops compose loading it itself) |
+| Name clash | Warn in the confirm: already running (up recreates what changed), or pinned from other files (this replaces that pin) |
+| Up options | None beyond the allow-listed `up -d --remove-orphans` |
+| After up | Closing a successful run opens `/compose/<project>` in the active tab |
+| Pins | `{ name, files }`; settings with the old `{ name, file }` still load |
+| Paths | Converted as for every run (`E:\x` to `/mnt/e/x`, `\\wsl.localhost\<distro>\x` to `/x`). In WSL mode a folder `to_wsl_path` can't convert (network shares) is refused before anything runs |
+
+### Work
+
+- Rust: `compose.rs` file names (`is_compose_name`, `FileRole`),
+  `folder_candidates` / `file_candidates`, `join_path`, multi-file `Pinned`
+  (unit-tested); commands `compose_drop_candidates`, `compose_project_name`,
+  `compose_pin(files)`; an integration test that brings up a dropped Windows
+  folder (base + override) through WSL and checks the override applied.
+- UI: the drop router in `useAppShell`, `DropComposeDialog`, FilesView on
+  `claimDrops`, pinned file lists in projects and lists.
+- ui-check: the mock replays Tauri drag events (`__dragOver`, `__drop`,
+  `__dragLeave`); a `compose-drop` scenario.

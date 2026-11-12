@@ -59,6 +59,11 @@ milestones.
   `compose::readable_path`) and shown read-only; only .yml / .yaml files are
   handed to Explorer (`compose_show_file`). The resolved config
   (`config-yaml`) can hold .env secrets: fetched on request, never kept.
+  Pins are `{ name, files }` (old `{ name, file }` still loads). Dropped
+  files / folders are scanned in Rust (`compose_drop_candidates`: compose's
+  default names, overrides, `compose-*` / `docker-compose-*` variants),
+  confirmed with ticks in -f order, named by `compose_project_name` (only
+  the name crosses to the UI), then pinned and brought up.
 
 ## Dependency policy
 
@@ -98,7 +103,7 @@ src/sections/<id>/          one folder per section; use<Id>Section.tsx returns S
 src/sections/images/, volumes/, networks/   one-level sections (list + item detail)
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
                             RunDialog (streamed output), ComposeFileView (files + resolved),
-                            the section
+                            DropComposeDialog (dropped files: ticks, name, clash), the section
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/status/                 status.ts: one state model for containers, projects, images,
                             volumes, networks (unit-tested); LegendDialog
@@ -116,8 +121,8 @@ src/sections/containers/    paths.ts (the @project/name/child path scheme), acti
 src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
                             openInNewTab, engine, ask,
                             askName, confirmTyped, showError, showFlash, setWorking,
-                            openMenu, copyText) and SectionUi (tree, content, commands,
-                            status, busy, refresh, dialogs)
+                            openMenu, copyText, claimDrops) and SectionUi (tree, content,
+                            commands, status, busy, refresh, dialogs, fileDrop)
 src/shell/places.ts         Place = { section | null (Home), path }; crumbs, parent, uri,
                             parseAddress
 src/api/core.ts             `call` (invoke wrapper), AppError, Settings
@@ -126,7 +131,8 @@ src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats, stats totals channels; pop-out
 src/api/resources.ts        images (pull channel), volumes, networks
 src/api/files.ts            container folders, copy out / in
-src/api/compose.ts          compose runs (channel), pinned files, WSL distros, compose files
+src/api/compose.ts          compose runs (channel), pinned files, dropped files, WSL distros,
+                            compose files
 src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
@@ -263,7 +269,12 @@ new tab", and paths with their own parser (`isPath`).
   tries exec (a POSIX sh script with `stat`) and falls back to the archive API
   (stopped containers, no shell; capped at 64 MB read). Copy out saves a file
   as itself and a folder as .tar; copy in builds a tar in memory (512 MB cap).
-  Drops from Explorer use the template's `onFileDrop`.
+  Drops from Explorer come through `shell.claimDrops`.
+- File drops: the shell owns the window's one `onFileDrop` listener (never
+  call it elsewhere). A mounted view that wants drops claims them
+  (`shell.claimDrops`, latest wins, release in the effect cleanup);
+  unclaimed drops go to a section's `fileDrop` (compose: confirm, pin, up).
+  Drops while a dialog is open are ignored.
 
 ## Testing
 
@@ -326,3 +337,7 @@ Details in `PLAN.md`.)
 11. ✅ Dashboard layout (see PLAN.md, M11; built on a branch to try out): a
     second layout chosen in Settings, a live overview from an engine-wide
     stats totals stream, boards with inline and bulk actions.
+12. ✅ Drop to start (see PLAN.md, M12): drag a compose file or folder
+    from Explorer onto the window (not container Files); confirm the files
+    (base + override ticked, variants offered) and see the project name and
+    any clash; it's pinned (pins hold file lists) and brought up, then opens.

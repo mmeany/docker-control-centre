@@ -2,7 +2,7 @@
 //! version), WSL distros, and pinned compose files.
 
 use super::AppState;
-use crate::compose::{self, Distro, Pinned, Runner, Target};
+use crate::compose::{self, Candidate, Distro, Pinned, Runner, Target};
 use crate::error::AppError;
 use serde::Serialize;
 use std::process::Stdio;
@@ -350,37 +350,172 @@ pub fn compose_pinned(state: State<'_, AppState>) -> Vec<Pinned> {
     pinned_list(&state)
 }
 
-/// Pins a compose file: compose reads it (so a broken file is refused) and
-/// names the project.
-#[tauri::command]
-pub async fn compose_pin(
-    state: State<'_, AppState>,
-    file: String,
-) -> Result<Vec<Pinned>, AppError> {
+/// Compose reads the files (so broken ones are refused) and names the project.
+/// The resolved config can hold secrets: only the name leaves this function.
+async fn project_name(state: &AppState, files: &[String]) -> Result<String, AppError> {
+    let first = files
+        .first()
+        .ok_or_else(|| AppError::invalid("Choose at least one compose file."))?;
     let target = Target {
         name: None,
-        dir: compose::parent_dir(&file),
-        files: vec![file.clone()],
+        dir: compose::parent_dir(first),
+        files: files.to_vec(),
     };
-    let out = run_once(&runner(&state), &target, "config").await?;
+    let out = run_once(&runner(state), &target, "config").await?;
     if out.code != Some(0) {
         let msg = out.stderr.trim();
+        let what = if files.len() == 1 {
+            first.clone()
+        } else {
+            format!("these {} files", files.len())
+        };
         return Err(AppError::invalid(format!(
-            "Compose couldn't read {file}: {}",
+            "Compose couldn't read {what}: {}",
             if msg.is_empty() { "no details" } else { msg }
         )));
     }
-    let name = serde_json::from_str::<serde_json::Value>(&out.stdout)
+    Ok(serde_json::from_str::<serde_json::Value>(&out.stdout)
         .ok()
         .and_then(|v| v.get("name").and_then(|n| n.as_str()).map(String::from))
-        .unwrap_or_else(|| compose::default_project_name(&target.dir));
+        .unwrap_or_else(|| compose::default_project_name(&target.dir)))
+}
+
+/// The project name compose gives these files (in -f order), checking they read.
+#[tauri::command]
+pub async fn compose_project_name(
+    state: State<'_, AppState>,
+    files: Vec<String>,
+) -> Result<String, AppError> {
+    project_name(&state, &files).await
+}
+
+/// Pins compose files (one project, in -f order): compose reads them (so
+/// broken ones are refused) and names the project. Replaces a pin with the
+/// same name or the same files.
+#[tauri::command]
+pub async fn compose_pin(
+    state: State<'_, AppState>,
+    files: Vec<String>,
+) -> Result<Vec<Pinned>, AppError> {
+    let name = project_name(&state, &files).await?;
     let mut list: Vec<Pinned> = pinned_list(&state)
         .into_iter()
-        .filter(|p| p.file != file && p.name != name)
+        .filter(|p| p.files != files && p.name != name)
         .collect();
-    list.push(Pinned { name, file });
+    list.push(Pinned { name, files });
     list.sort_by(|a, b| a.name.cmp(&b.name));
     save_pinned(&state, &list)
+}
+
+/// What one folder's worth of a drop offers.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropGroup {
+    pub dir: String,
+    pub candidates: Vec<Candidate>,
+    /// Why nothing from here can run.
+    pub error: Option<String>,
+}
+
+/// The names of the files (not folders) in a folder.
+async fn file_names(dir: &str) -> Result<Vec<String>, AppError> {
+    let mut rd = tokio::fs::read_dir(dir)
+        .await
+        .map_err(|e| AppError::io(e, dir))?;
+    let mut out = vec![];
+    while let Some(e) = rd.next_entry().await.map_err(|e| AppError::io(e, dir))? {
+        // metadata follows links, so a linked compose file counts.
+        if tokio::fs::metadata(e.path())
+            .await
+            .map(|m| m.is_file())
+            .unwrap_or(false)
+        {
+            out.push(e.file_name().to_string_lossy().into_owned());
+        }
+    }
+    Ok(out)
+}
+
+/// Files and folders dropped on the window (from Explorer), as compose
+/// projects to confirm: a folder offers its compose files, dropped files are
+/// grouped by folder (with the base file's override added). Nothing runs here.
+#[tauri::command]
+pub async fn compose_drop_candidates(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<DropGroup>, AppError> {
+    let wsl = matches!(runner(&state), Runner::Wsl { .. });
+    let mut groups: Vec<DropGroup> = vec![];
+    let mut dropped_files: Vec<(String, Vec<String>)> = vec![];
+    let group_error = |dir: &str, error: String| DropGroup {
+        dir: dir.to_string(),
+        candidates: vec![],
+        error: Some(error),
+    };
+    for p in paths {
+        let meta = match tokio::fs::metadata(&p).await {
+            Ok(m) => m,
+            Err(e) => {
+                groups.push(group_error(&p, AppError::io(e, &p).message));
+                continue;
+            }
+        };
+        if meta.is_dir() {
+            match file_names(&p).await {
+                Ok(names) => {
+                    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+                    let candidates = compose::folder_candidates(&p, &names);
+                    groups.push(if candidates.is_empty() {
+                        group_error(
+                            &p,
+                            format!("{p} has no compose file (compose.yaml, docker-compose.yml, compose-*.yml and so on)."),
+                        )
+                    } else {
+                        DropGroup {
+                            dir: p.clone(),
+                            candidates,
+                            error: None,
+                        }
+                    });
+                }
+                Err(e) => groups.push(group_error(&p, e.message)),
+            }
+        } else if compose::is_compose_file(&p) {
+            let dir = compose::parent_dir(&p);
+            let name = compose::file_name(&p).to_string();
+            match dropped_files.iter_mut().find(|(d, _)| *d == dir) {
+                Some((_, names)) => names.push(name),
+                None => dropped_files.push((dir, vec![name])),
+            }
+        }
+    }
+    for (dir, names) in dropped_files {
+        let siblings = file_names(&dir).await.unwrap_or_default();
+        let siblings: Vec<&str> = siblings.iter().map(String::as_str).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        groups.push(DropGroup {
+            candidates: compose::file_candidates(&dir, &names, &siblings),
+            dir,
+            error: None,
+        });
+    }
+    if wsl {
+        for g in groups.iter_mut().filter(|g| g.error.is_none()) {
+            if compose::to_wsl_path(&g.dir).is_none() {
+                g.error = Some(format!(
+                    "WSL can't open {}. Compose runs in WSL (Settings), which reaches local drives and WSL folders, not network shares.",
+                    g.dir
+                ));
+                g.candidates.clear();
+            }
+        }
+    }
+    if groups.is_empty() {
+        return Err(AppError::invalid(
+            "Drop a compose file (.yml or .yaml), or a folder with one.",
+        ));
+    }
+    Ok(groups)
 }
 
 #[tauri::command]
@@ -551,6 +686,81 @@ mod integration {
             .contains_key(LABEL_PROJECT));
 
         let down = run_once(&runner, &named, "down").await.expect("down");
+        assert_eq!(down.code, Some(0), "{down:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A dropped Windows folder with a base file, its override and a variant:
+    /// the base and override are offered ticked, and up through WSL applies
+    /// both (the override's variable reaches the container).
+    #[tokio::test]
+    async fn up_from_a_dropped_folder() {
+        let engine = Engine::from_env();
+        let docker = engine.docker().expect("client");
+        if docker.inspect_image("python:3.12-slim").await.is_err() {
+            eprintln!("skipped: python:3.12-slim isn't on this engine");
+            return;
+        }
+        let name = format!("dcc-drop-{}", std::process::id());
+        let dir = std::env::temp_dir().join(&name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("docker-compose.yml"),
+            "services:\n  app:\n    image: python:3.12-slim\n    command: [\"sleep\", \"300\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("docker-compose.override.yml"),
+            "services:\n  app:\n    environment:\n      FROM_OVERRIDE: \"yes\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("docker-compose-broken.yml"), "not: [compose").unwrap();
+        let dir_s = dir.to_string_lossy().to_string();
+
+        let names = file_names(&dir_s).await.expect("list");
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let offered = compose::folder_candidates(&dir_s, &names);
+        let files: Vec<String> = offered
+            .iter()
+            .filter(|c| c.ticked)
+            .map(|c| c.path.clone())
+            .collect();
+        assert_eq!(files.len(), 2, "{offered:?}");
+        assert!(
+            files[1].ends_with("docker-compose.override.yml"),
+            "{files:?}"
+        );
+
+        let runner = Runner::Wsl { distro: None };
+        let target = Target {
+            name: Some(compose::default_project_name(&dir_s)),
+            dir: dir_s.clone(),
+            files,
+        };
+        let up = run_once(&runner, &target, "up").await.expect("up");
+        assert_eq!(up.code, Some(0), "{up:?}");
+
+        let opts = ListContainersOptionsBuilder::new().all(true).build();
+        let mine: Vec<_> = docker
+            .list_containers(Some(opts))
+            .await
+            .unwrap()
+            .into_iter()
+            .map(container_item)
+            .filter(|c| c.project == target.name)
+            .collect();
+        assert_eq!(mine.len(), 1, "{mine:?}");
+        let env = docker
+            .inspect_container(&mine[0].id, None)
+            .await
+            .unwrap()
+            .config
+            .unwrap()
+            .env
+            .unwrap_or_default();
+        assert!(env.iter().any(|e| e == "FROM_OVERRIDE=yes"), "{env:?}");
+
+        let down = run_once(&runner, &target, "down").await.expect("down");
         assert_eq!(down.code, Some(0), "{down:?}");
         std::fs::remove_dir_all(&dir).ok();
     }

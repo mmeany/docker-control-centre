@@ -2,10 +2,11 @@
 // compose file chosen by the user, so the project shows while it's down).
 // Up / stop / restart / pull / down run `docker compose` in WSL or on the
 // host (Settings), with the output shown as it runs. A project's Logs merge
-// every service's logs in time order.
+// every service's logs in time order. Compose files or folders dropped on
+// the window (anywhere but container Files) are confirmed, pinned and brought up.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
-import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb } from "../../api/compose";
+import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb, type DropGroup } from "../../api/compose";
 import { Board, type BoardAction } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
@@ -19,7 +20,8 @@ import { NameList, PropsTable } from "../common";
 import { containerPath } from "../containers/paths";
 import { LogsView } from "../containers/LogsView";
 import { ComposeFileView } from "./ComposeFileView";
-import { fileName, projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
+import { DropComposeDialog } from "./DropComposeDialog";
+import { fileName, parentDir, pinnedLabel, projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
 import { RunDialog } from "./RunDialog";
 import { attention, containerStatus, projectStatus } from "../../status/status";
 import { SectionBadge } from "../../components/SectionBadge";
@@ -85,7 +87,10 @@ export function useComposeSection(shell: Shell): SectionUi {
   const setPinned = shell.setComposePinned;
   const [distro, setDistro] = useState("");
   const [open, setOpen] = useState(true);
-  const [running, setRunning] = useState<{ project: Project; verb: ComposeVerb } | null>(null);
+  /** A run in progress; openAfter: go to the project when it succeeds (drops). */
+  const [running, setRunning] = useState<{ project: Project; verb: ComposeVerb; openAfter?: boolean } | null>(null);
+  /** Dropped projects waiting to be confirmed, one at a time. */
+  const [drops, setDrops] = useState<{ groups: DropGroup[]; at: number } | null>(null);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
@@ -158,9 +163,9 @@ export function useComposeSection(shell: Shell): SectionUi {
       const file = await appApi.pickOpenFile("Pin a compose file", "Compose files", ["yml", "yaml"]);
       if (!file) return;
       shell.setWorking("Reading the compose file…");
-      const list = await composeApi.pin(file);
+      const list = await composeApi.pin([file]);
       setPinned(list);
-      const added = list.find((p) => p.file === file);
+      const added = list.find((p) => p.files.includes(file));
       shell.showFlash(added ? `Pinned ${added.name}` : "Pinned");
     } catch (e) {
       shell.showError(e);
@@ -179,6 +184,43 @@ export function useComposeSection(shell: Shell): SectionUi {
     }
   }
 
+  // Dropped files and folders: Rust groups them by folder and offers the
+  // files; each group is confirmed in turn, then pinned and brought up.
+  async function fileDrop(paths: string[]) {
+    shell.setWorking("Reading the dropped files…");
+    try {
+      const groups = await composeApi.dropCandidates(paths);
+      const ok = groups.filter((g) => !g.error);
+      const errors = groups.filter((g) => g.error).map((g) => g.error);
+      if (ok.length) setDrops({ groups: ok, at: 0 });
+      if (errors.length) shell.showError({ message: errors.join(" ") });
+    } catch (e) {
+      shell.showError(e);
+    } finally {
+      shell.setWorking(null);
+    }
+  }
+
+  const nextDrop = () => setDrops((d) => (d && d.at + 1 < d.groups.length ? { ...d, at: d.at + 1 } : null));
+
+  async function startDropped(files: string[]) {
+    nextDrop();
+    shell.setWorking("Pinning the compose files…");
+    try {
+      const list = await composeApi.pin(files);
+      setPinned(list);
+      const pin = list.find((p) => p.files.length === files.length && p.files.every((f, i) => f === files[i]));
+      if (!pin) return;
+      const known = byName.get(pin.name);
+      const project: Project = { name: pin.name, dir: parentDir(files[0]), files, containers: known?.containers ?? [], running: known?.running ?? 0, pinned: pin };
+      setRunning({ project, verb: "up", openAfter: true });
+    } catch (e) {
+      shell.showError(e);
+    } finally {
+      shell.setWorking(null);
+    }
+  }
+
   const run = (verb: ComposeVerb, p: Project | undefined) => p && setRunning({ project: p, verb });
   const canRun = (p: Project | undefined) => !!p && (p.files.length > 0 || p.pinned !== null || p.containers.length > 0);
 
@@ -194,7 +236,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       name: { text: p.name, sort: p.name },
       state: { text: statusOf(p).label, sort: p.containers.length ? p.running - p.containers.length : 1 },
       services: { text: [...new Set(p.containers.map((c) => c.service ?? c.name))].join(", "), sort: p.containers.length },
-      folder: { text: p.pinned ? p.pinned.file : shown(p.dir), sort: p.dir },
+      folder: { text: p.pinned ? pinnedLabel(p.pinned) : shown(p.dir), sort: p.dir },
       source: { text: p.pinned && p.containers.length ? "Pinned, running" : p.pinned ? "Pinned" : "Running", sort: p.pinned ? 0 : 1 },
     },
   }));
@@ -447,8 +489,20 @@ export function useComposeSection(shell: Shell): SectionUi {
         const r = running;
         setRunning(null);
         if (ok) shell.showFlash(`${VERBS[r.verb].label}: ${r.project.name} done`);
+        if (ok && r.openAfter) go(r.project.name);
         refresh();
       }}
+    />
+  ) : drops ? (
+    <DropComposeDialog
+      key={`${drops.at}:${drops.groups[drops.at].dir}`}
+      group={drops.groups[drops.at]}
+      index={drops.at + 1}
+      count={drops.groups.length}
+      projects={byName}
+      shown={shown}
+      onStart={(files) => void startDropped(files)}
+      onCancel={nextDrop}
     />
   ) : null;
 
@@ -469,6 +523,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       else if (["up", "stop", "start", "restart", "pull"].includes(verb)) run(verb as ComposeVerb, p);
     },
     attention: sectionAttention,
+    fileDrop: (paths: string[]) => void fileDrop(paths),
     placeStatus: (p: string) => {
       const pr = byName.get(p.split("/")[0]);
       return pr ? statusOf(pr) : undefined;

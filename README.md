@@ -29,6 +29,10 @@ navigation, a live overview and cards instead.
   and every service's logs merged in time order. Each project's Compose
   file shows the files it was started from (read-only, one tab each, with
   Show in folder and Open in editor) and, on request, the resolved config.
+  Drag a compose file, or a folder holding one, from Explorer onto the
+  window to start it: you choose which files go in (its override and any
+  `compose-*.yml` variants are offered), see the project name and whether
+  it's already running, then it's pinned and brought up.
 - **Images:** pull with per-layer progress, inspect (config, history, which
   containers use it), delete, and prune with a preview of exactly what goes.
 - **Volumes:** which containers use each, delete (type the name to confirm:

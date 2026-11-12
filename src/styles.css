@@ -571,6 +571,16 @@ button { font: inherit; color: inherit; }
 .files-view.drop-target { outline: 2px dashed var(--drop); outline-offset: -4px; background: var(--drop-bg); }
 .files-note { margin: 4px 8px; }
 
+/* ---------- Dropping compose files ---------- */
+/* Above the panes, under dialogs and menus; it never takes the mouse. */
+.drop-overlay { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: flex; align-items: center; justify-content: center; outline: 2px dashed var(--drop); outline-offset: -6px; background: var(--drop-bg); }
+.drop-overlay-note { padding: 10px 16px; border: 1px solid var(--drop); border-radius: 4px; background: var(--chrome); color: var(--text); font-size: 13px; }
+.drop-dialog { width: 560px; }
+.drop-files { margin: 6px 0; border: 1px solid var(--border-light); }
+.drop-files td { vertical-align: middle; }
+.drop-files td.drop-tick { width: 1%; padding-right: 0; }
+.drop-files label { cursor: pointer; }
+
 /* ---------- Status colours (see src/status) ---------- */
 .status-mark { flex-shrink: 0; }
 .st-running { color: var(--st-running); }

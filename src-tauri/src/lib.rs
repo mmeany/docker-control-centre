@@ -70,6 +70,8 @@ pub fn run() {
             commands::compose::wsl_distros,
             commands::compose::compose_pinned,
             commands::compose::compose_pin,
+            commands::compose::compose_project_name,
+            commands::compose::compose_drop_candidates,
             commands::compose::compose_unpin,
             commands::compose::compose_read_file,
             commands::compose::compose_show_file,
