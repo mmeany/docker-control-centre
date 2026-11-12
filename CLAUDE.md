@@ -59,7 +59,10 @@ milestones.
   `compose::readable_path`) and shown read-only; only .yml / .yaml files are
   handed to Explorer (`compose_show_file`). The resolved config
   (`config-yaml`) can hold .env secrets: fetched on request, never kept.
-  Pins are `{ name, files }` (old `{ name, file }` still loads). Dropped
+  Pins are `{ name, files }`, saved with `file` too (0.5.0 reads only that);
+  old `{ name, file }` still loads, and an unreadable entry is skipped
+  (`compose::read_pins`). WSL paths in another distro than compose runs in
+  are refused (`compose::check_distro`). Dropped
   files / folders are scanned in Rust (`compose_drop_candidates`: compose's
   default names, overrides, `compose-*` / `docker-compose-*` variants),
   confirmed with ticks in -f order, named by `compose_project_name` (only
@@ -277,8 +280,10 @@ new tab", and paths with their own parser (`isPath`).
 - File drops: the shell owns the window's one `onFileDrop` listener (never
   call it elsewhere). A mounted view that wants drops claims them
   (`shell.claimDrops`, latest wins, release in the effect cleanup);
-  unclaimed drops go to a section's `fileDrop` (compose: confirm, pin, up).
-  Drops while a dialog is open are ignored.
+  unclaimed drops go to a section's `fileDrop` (compose: confirm, pin, up;
+  one project at a time), except in pop-outs. Every drop, claimed or not,
+  is ignored while a dialog is open. OS opening (Explorer / `open` /
+  `xdg-open`) goes through `commands::os_open`.
 
 ## Testing
 

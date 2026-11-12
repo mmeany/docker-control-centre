@@ -17,6 +17,8 @@ interface Props {
   /** 1-based position when several folders were dropped. */
   index: number;
   count: number;
+  /** Why some dropped folders were left out (shown here, not in a second dialog). */
+  skipped: string[];
   /** Projects the app already knows, by name. */
   projects: Map<string, Project>;
   /** Engine or Windows path, as shown to the user. */
@@ -25,7 +27,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function DropComposeDialog({ group, index, count, projects, shown, onStart, onCancel }: Props) {
+export function DropComposeDialog({ group, index, count, skipped, projects, shown, onStart, onCancel }: Props) {
   const [ticked, setTicked] = useState(() => group.candidates.map((c) => c.ticked));
   const files = group.candidates.filter((_, i) => ticked[i]).map((c) => c.path);
   const key = files.join("\n");
@@ -66,6 +68,11 @@ export function DropComposeDialog({ group, index, count, projects, shown, onStar
           Start a compose project{count > 1 ? ` (${index} of ${count})` : ""}
         </div>
         <div className="dialog-body">
+          {skipped.map((s) => (
+            <p key={s} className="warn-note drop-skipped">
+              Skipped: {s}
+            </p>
+          ))}
           <p>
             From <span className="mono">{shown(group.dir)}</span>. Ticked files are passed to compose in this order, then it runs{" "}
             <span className="mono">up -d</span> and the project is pinned.

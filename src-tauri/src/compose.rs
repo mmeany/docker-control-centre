@@ -296,7 +296,7 @@ pub fn is_compose_file(p: &str) -> bool {
 
 /// Compose files the user pinned, so the project shows while it's down.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", from = "PinnedSaved")]
+#[serde(rename_all = "camelCase", from = "PinnedSaved", into = "PinnedSaved")]
 pub struct Pinned {
     /// Project name (from `compose config`).
     pub name: String,
@@ -304,14 +304,15 @@ pub struct Pinned {
     pub files: Vec<String>,
 }
 
-/// A pin as saved: `files`, or `file` from before multi-file pins.
-#[derive(Deserialize)]
+/// A pin as saved: `files`, plus `file` (the first one) so 0.5.0 and
+/// earlier, which read only `file`, still find their pins.
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PinnedSaved {
     name: String,
     #[serde(default)]
     files: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     file: Option<String>,
 }
 
@@ -328,12 +329,72 @@ impl From<PinnedSaved> for Pinned {
     }
 }
 
-/// The parent folder of a file path (either slash).
+impl From<Pinned> for PinnedSaved {
+    fn from(p: Pinned) -> PinnedSaved {
+        PinnedSaved {
+            name: p.name,
+            file: p.files.first().cloned(),
+            files: p.files,
+        }
+    }
+}
+
+/// Pins from settings, one by one: an entry that can't be read (or names no
+/// file) is left out rather than losing the whole list.
+pub fn read_pins(value: Option<&serde_json::Value>) -> Vec<Pinned> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|v| serde_json::from_value::<Pinned>(v.clone()).ok())
+                .filter(|p| !p.files.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The parent folder of a file path (either slash). A file at a drive's
+/// root gives the root (`E:\`), not `E:`, which Windows reads as the
+/// current folder on that drive.
 pub fn parent_dir(file: &str) -> String {
     match file.rfind(['/', '\\']) {
         Some(0) => "/".into(),
+        Some(2) if file.as_bytes()[1] == b':' && file.as_bytes()[0].is_ascii_alphabetic() => {
+            file[..=2].to_string()
+        }
         Some(i) => file[..i].to_string(),
         None => String::new(),
+    }
+}
+
+/// The WSL distro a `\\wsl$\<distro>\…` or `\\wsl.localhost\<distro>\…`
+/// path is in; None for anything else.
+pub fn wsl_distro_of(p: &str) -> Option<&str> {
+    let p = p.trim();
+    let lower = p.to_ascii_lowercase();
+    for prefix in [
+        r"\\wsl$\",
+        r"\\wsl.localhost\",
+        "//wsl$/",
+        "//wsl.localhost/",
+    ] {
+        if lower.starts_with(prefix) {
+            let rest = &p[prefix.len()..];
+            return rest.split(['\\', '/']).next().filter(|d| !d.is_empty());
+        }
+    }
+    None
+}
+
+/// In WSL mode, a path inside a distro must be in the one compose runs in
+/// (`runs_in`: the chosen distro, else WSL's default), or the same Linux
+/// path would be opened in another distro.
+pub fn check_distro(p: &str, runs_in: Option<&str>) -> Result<(), AppError> {
+    match (wsl_distro_of(p), runs_in) {
+        (Some(d), Some(r)) if !d.eq_ignore_ascii_case(r) => Err(AppError::invalid(format!(
+            "{p} is in {d}, but compose runs in {r} (Settings)."
+        ))),
+        _ => Ok(()),
     }
 }
 
@@ -359,12 +420,22 @@ pub fn join_path(dir: &str, name: &str) -> String {
     format!("{dir}{sep}{name}")
 }
 
-/// Compose's own file names, in the order it looks for them.
+/// Compose's own file names, in the order it looks for them (checked against
+/// compose v5: note docker-compose.yml comes before .yaml).
 pub const DEFAULT_FILES: [&str; 4] = [
     "compose.yaml",
     "compose.yml",
-    "docker-compose.yaml",
     "docker-compose.yml",
+    "docker-compose.yaml",
+];
+
+/// Compose's override names, in the order it looks for them; it takes the
+/// first that exists, whatever the base file is called.
+pub const DEFAULT_OVERRIDES: [&str; 4] = [
+    "compose.override.yml",
+    "compose.override.yaml",
+    "docker-compose.override.yml",
+    "docker-compose.override.yaml",
 ];
 
 /// What a compose file is to the others in its folder.
@@ -426,20 +497,13 @@ fn base_of<'a>(names: &[&'a str]) -> Option<&'a str> {
         .find_map(|d| names.iter().find(|n| n.eq_ignore_ascii_case(d)).copied())
 }
 
-/// The override for a base file among these names: same stem first, then any
-/// default override.
-fn override_of<'a>(base: &str, names: &[&'a str]) -> Option<&'a str> {
-    let (stem, _) = compose_stem(base)?;
-    let overrides: Vec<&str> = names
+/// The override compose layers on its base file from these names: the first
+/// of its fixed list, whatever the base is called (checked against compose
+/// v5: `compose.yaml` + `docker-compose.override.yml` takes that override).
+fn override_in<'a>(names: &[&'a str]) -> Option<&'a str> {
+    DEFAULT_OVERRIDES
         .iter()
-        .copied()
-        .filter(|n| matches!(compose_stem(n), Some((_, true))))
-        .collect();
-    overrides
-        .iter()
-        .find(|n| compose_stem(n).map(|(s, _)| s) == Some(stem.clone()))
-        .or_else(|| overrides.first())
-        .copied()
+        .find_map(|d| names.iter().find(|n| n.eq_ignore_ascii_case(d)).copied())
 }
 
 /// Puts candidates in -f order: base, override, then variants by name.
@@ -464,7 +528,7 @@ pub fn folder_candidates(dir: &str, names: &[&str]) -> Vec<Candidate> {
         .filter(|n| is_compose_name(n))
         .collect();
     let base = base_of(&names);
-    let over = base.and_then(|b| override_of(b, &names));
+    let over = base.and_then(|_| override_in(&names));
     let lone = names.len() == 1;
     ordered(
         names
@@ -507,8 +571,8 @@ pub fn file_candidates(dir: &str, dropped: &[&str], siblings: &[&str]) -> Vec<Ca
         })
         .collect();
     let has_override = list.iter().any(|c| c.role == FileRole::Override);
-    if let (Some(b), false) = (base, has_override) {
-        if let Some(o) = override_of(b, siblings) {
+    if let (Some(_), false) = (base, has_override) {
+        if let Some(o) = override_in(siblings) {
             list.push(Candidate {
                 path: join_path(dir, o),
                 role: FileRole::Override,
@@ -579,7 +643,8 @@ mod tests {
         );
         assert_eq!(list[0].path, r"E:\shop\docker-compose.yml");
 
-        // compose's own order picks the base; the matching override wins.
+        // compose's own order picks the base, and the first override in its
+        // list wins whatever the base is called.
         let list = folder_candidates(
             "/home/mark/app",
             &[
@@ -599,6 +664,35 @@ mod tests {
             ]
         );
         assert_eq!(list[0].path, "/home/mark/app/compose.yaml");
+
+        // As compose v5 picks them: docker-compose.yml before .yaml, and
+        // compose.override.yaml before docker-compose.override.yml.
+        let list = folder_candidates(
+            "/x",
+            &[
+                "docker-compose.yaml",
+                "docker-compose.override.yml",
+                "docker-compose.yml",
+                "compose.override.yaml",
+            ],
+        );
+        assert_eq!(
+            picked(&list)[..2],
+            [
+                ("docker-compose.yml", FileRole::Base, true),
+                ("compose.override.yaml", FileRole::Override, true),
+            ]
+        );
+        assert_eq!(
+            picked(&folder_candidates(
+                "/x",
+                &["compose.yaml", "docker-compose.override.yml"]
+            )),
+            vec![
+                ("compose.yaml", FileRole::Base, true),
+                ("docker-compose.override.yml", FileRole::Override, true),
+            ]
+        );
 
         // No base: one variant is ticked, several are left to choose.
         assert_eq!(
@@ -685,10 +779,65 @@ mod tests {
         )
         .unwrap();
         assert_eq!(new.files, vec!["a.yml".to_string(), "b.yml".to_string()]);
+        // Saved with `file` too, so 0.5.0 still reads its pins.
         assert_eq!(
             serde_json::to_value(&new).unwrap(),
-            json!({"name": "shop", "files": ["a.yml", "b.yml"]})
+            json!({"name": "shop", "files": ["a.yml", "b.yml"], "file": "a.yml"})
         );
+    }
+
+    #[test]
+    fn skips_only_the_pins_it_cant_read() {
+        let saved = json!([
+            {"name": "shop", "files": ["a.yml"]},
+            {"name": 7},
+            "not a pin",
+            {"name": "empty", "files": []},
+            {"name": "old", "file": "b.yml"}
+        ]);
+        let names: Vec<String> = read_pins(Some(&saved))
+            .into_iter()
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(names, vec!["shop", "old"]);
+        assert!(read_pins(Some(&json!({"not": "a list"}))).is_empty());
+        assert!(read_pins(None).is_empty());
+    }
+
+    #[test]
+    fn finds_parent_folders() {
+        assert_eq!(parent_dir(r"E:\shop\compose.yml"), r"E:\shop");
+        assert_eq!(parent_dir(r"E:\compose.yml"), r"E:\");
+        assert_eq!(parent_dir("E:/compose.yml"), "E:/");
+        assert_eq!(parent_dir("/compose.yml"), "/");
+        assert_eq!(parent_dir("/ab/compose.yml"), "/ab");
+        assert_eq!(parent_dir("compose.yml"), "");
+        assert_eq!(
+            to_wsl_path(&parent_dir(r"E:\compose.yml")).as_deref(),
+            Some("/mnt/e")
+        );
+    }
+
+    #[test]
+    fn keeps_wsl_paths_to_the_distro_compose_runs_in() {
+        assert_eq!(
+            wsl_distro_of(r"\\wsl.localhost\Debian\home\x"),
+            Some("Debian")
+        );
+        assert_eq!(wsl_distro_of(r"\\WSL$\Ubuntu-Dev\home"), Some("Ubuntu-Dev"));
+        assert_eq!(wsl_distro_of(r"E:\x"), None);
+        assert_eq!(wsl_distro_of(r"\\server\share"), None);
+        let other = check_distro(r"\\wsl.localhost\Debian\home\x", Some("Ubuntu-Dev")).unwrap_err();
+        assert!(
+            other
+                .message
+                .contains("is in Debian, but compose runs in Ubuntu-Dev"),
+            "{}",
+            other.message
+        );
+        assert!(check_distro(r"\\wsl.localhost\ubuntu-dev\home\x", Some("Ubuntu-Dev")).is_ok());
+        assert!(check_distro(r"E:\x", Some("Ubuntu-Dev")).is_ok());
+        assert!(check_distro(r"\\wsl.localhost\Debian\x", None).is_ok());
     }
 
     #[test]

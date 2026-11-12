@@ -4,7 +4,7 @@
 // host (Settings), with the output shown as it runs. A project's Logs merge
 // every service's logs in time order. Compose files or folders dropped on
 // the window (anywhere but container Files) are confirmed, pinned and brought up.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
 import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb, type DropGroup } from "../../api/compose";
 import { Board, type BoardAction } from "../../components/Board";
@@ -87,10 +87,21 @@ export function useComposeSection(shell: Shell): SectionUi {
   const setPinned = shell.setComposePinned;
   const [distro, setDistro] = useState("");
   const [open, setOpen] = useState(true);
-  /** A run in progress; openAfter: go to the project when it succeeds (drops). */
-  const [running, setRunning] = useState<{ project: Project; verb: ComposeVerb; openAfter?: boolean } | null>(null);
-  /** Dropped projects waiting to be confirmed, one at a time. */
-  const [drops, setDrops] = useState<{ groups: DropGroup[]; at: number } | null>(null);
+  /**
+   * A run in progress, with its own id (the Run dialog's key, so a new run
+   * never shows in an old one's dialog); openAfter: go to the project when
+   * it succeeds (drops).
+   */
+  const [running, setRunning] = useState<{ id: number; project: Project; verb: ComposeVerb; openAfter?: boolean } | null>(null);
+  const runIds = useRef(0);
+  const startRun = (r: { project: Project; verb: ComposeVerb; openAfter?: boolean }) => setRunning({ ...r, id: ++runIds.current });
+  /**
+   * Dropped projects waiting to be confirmed, one at a time; skipped: why
+   * dropped folders that can't be used were left out (shown in the first).
+   */
+  const [drops, setDrops] = useState<{ groups: DropGroup[]; at: number; skipped: string[] } | null>(null);
+  /** A confirmed drop is being pinned: its up hasn't started yet. */
+  const [pinning, setPinning] = useState(false);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
@@ -146,7 +157,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       ],
       "cancel",
     );
-    if (choice === "down") setRunning({ project: p, verb: "down" });
+    if (choice === "down") startRun({ project: p, verb: "down" });
     else if (choice === "volumes") {
       const ok = await shell.confirmTyped(
         `Delete ${p.name}'s volumes?`,
@@ -154,7 +165,7 @@ export function useComposeSection(shell: Shell): SectionUi {
         p.name,
         "Down and delete",
       );
-      if (ok) setRunning({ project: p, verb: "down-volumes" });
+      if (ok) startRun({ project: p, verb: "down-volumes" });
     }
   }
 
@@ -185,15 +196,19 @@ export function useComposeSection(shell: Shell): SectionUi {
   }
 
   // Dropped files and folders: Rust groups them by folder and offers the
-  // files; each group is confirmed in turn, then pinned and brought up.
+  // files; each group is confirmed in turn, then pinned and brought up. The
+  // next one waits until the last one's up has finished (and while one is
+  // waiting or running, new drops are ignored).
   async function fileDrop(paths: string[]) {
+    if (drops || pinning || running) return;
     shell.setWorking("Reading the dropped files…");
     try {
       const groups = await composeApi.dropCandidates(paths);
       const ok = groups.filter((g) => !g.error);
-      const errors = groups.filter((g) => g.error).map((g) => g.error);
-      if (ok.length) setDrops({ groups: ok, at: 0 });
-      if (errors.length) shell.showError({ message: errors.join(" ") });
+      const skipped = groups.flatMap((g) => (g.error ? [g.error] : []));
+      // Folders that can't be used show in the first confirm, not a second dialog.
+      if (ok.length) setDrops({ groups: ok, at: 0, skipped });
+      else shell.showError({ message: skipped.join(" ") });
     } catch (e) {
       shell.showError(e);
     } finally {
@@ -204,24 +219,29 @@ export function useComposeSection(shell: Shell): SectionUi {
   const nextDrop = () => setDrops((d) => (d && d.at + 1 < d.groups.length ? { ...d, at: d.at + 1 } : null));
 
   async function startDropped(files: string[]) {
-    nextDrop();
+    // Hide this confirm without showing the next until this project's up is
+    // under way (the next shows once its Run dialog closes).
+    setPinning(true);
     shell.setWorking("Pinning the compose files…");
     try {
       const list = await composeApi.pin(files);
       setPinned(list);
       const pin = list.find((p) => p.files.length === files.length && p.files.every((f, i) => f === files[i]));
-      if (!pin) return;
-      const known = byName.get(pin.name);
-      const project: Project = { name: pin.name, dir: parentDir(files[0]), files, containers: known?.containers ?? [], running: known?.running ?? 0, pinned: pin };
-      setRunning({ project, verb: "up", openAfter: true });
+      if (pin) {
+        const known = byName.get(pin.name);
+        const project: Project = { name: pin.name, dir: parentDir(files[0]), files, containers: known?.containers ?? [], running: known?.running ?? 0, pinned: pin };
+        startRun({ project, verb: "up", openAfter: true });
+      }
     } catch (e) {
       shell.showError(e);
     } finally {
       shell.setWorking(null);
+      setPinning(false);
+      nextDrop();
     }
   }
 
-  const run = (verb: ComposeVerb, p: Project | undefined) => p && setRunning({ project: p, verb });
+  const run = (verb: ComposeVerb, p: Project | undefined) => p && startRun({ project: p, verb });
   const canRun = (p: Project | undefined) => !!p && (p.files.length > 0 || p.pinned !== null || p.containers.length > 0);
 
   // ---------------------------------------------------------------------------
@@ -482,6 +502,7 @@ export function useComposeSection(shell: Shell): SectionUi {
 
   const dialogs = running ? (
     <RunDialog
+      key={running.id}
       title={`${VERBS[running.verb].doing} · ${running.project.name}`}
       target={targetOf(running.project)}
       verb={running.verb}
@@ -493,12 +514,13 @@ export function useComposeSection(shell: Shell): SectionUi {
         refresh();
       }}
     />
-  ) : drops ? (
+  ) : drops && !pinning ? (
     <DropComposeDialog
       key={`${drops.at}:${drops.groups[drops.at].dir}`}
       group={drops.groups[drops.at]}
       index={drops.at + 1}
       count={drops.groups.length}
+      skipped={drops.at === 0 ? drops.skipped : []}
       projects={byName}
       shown={shown}
       onStart={(files) => void startDropped(files)}

@@ -265,7 +265,8 @@ export function useAppShell(): AppShell {
 
   // Files dropped from the OS: one listener for the window. A mounted claim
   // (container Files) takes them; otherwise a section's fileDrop does
-  // (compose). Ignored while a dialog is open.
+  // (compose), except in a pop-out, which shows its one place only.
+  // Everything is ignored while a dialog is open.
   const dropClaims = useRef<FileDropHandlers[]>([]);
   const appDrop = useRef<((paths: string[]) => void) | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -281,8 +282,11 @@ export function useAppShell(): AppShell {
     return onFileDrop({
       over: (x, y) => {
         const c = claim();
-        if (c) c.over(x, y);
-        else setDragging(!inDialog() && appDrop.current !== undefined);
+        if (inDialog()) {
+          c?.leave();
+          setDragging(false);
+        } else if (c) c.over(x, y);
+        else setDragging(appDrop.current !== undefined);
       },
       leave: () => {
         claim()?.leave();
@@ -291,8 +295,9 @@ export function useAppShell(): AppShell {
       drop: (paths, x, y) => {
         setDragging(false);
         const c = claim();
-        if (c) c.drop(paths, x, y);
-        else if (!inDialog()) appDrop.current?.(paths);
+        if (inDialog()) c?.leave();
+        else if (c) c.drop(paths, x, y);
+        else appDrop.current?.(paths);
       },
     });
   }, []);
@@ -338,7 +343,7 @@ export function useAppShell(): AppShell {
   }
   const activeDef = sectionOf(place);
   const active: SectionUi | null = activeDef ? sectionUis[activeDef.id] : null;
-  appDrop.current = Object.values(sectionUis).find((s) => s.fileDrop)?.fileDrop;
+  appDrop.current = POPOUT_PLACE ? undefined : Object.values(sectionUis).find((s) => s.fileDrop)?.fileDrop;
 
   // ---------------------------------------------------------------------------
   // Navigation

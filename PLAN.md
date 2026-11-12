@@ -381,14 +381,16 @@ project up.
 | On drop | Confirm, then up: compose reads the ticked files (`compose config`; only the name comes back to the UI) and names the project; Start pins and runs the existing `up` in the Run dialog |
 | Pinning | Always: a drop means "add this project" |
 | Several files | Files from one folder are one project (all as `-f`); separate folders are separate projects, confirmed in turn (Skip / Cancel) |
-| Folders | Compose's default names (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, in that order), their `.override` files, and variants `compose-*` / `docker-compose-*` (also `.`-separated), .yml or .yaml. Nothing matching: say so |
+| Folders | Compose's default names (`compose.yaml`, `compose.yml`, `docker-compose.yml`, `docker-compose.yaml`, in that order: checked against compose v5), the first of its overrides (`compose.override.yml`, `compose.override.yaml`, `docker-compose.override.yml`, `docker-compose.override.yaml`) whatever the base is called, and variants `compose-*` / `docker-compose-*` (also `.`-separated), .yml or .yaml. Nothing matching: say so |
 | Which files | A tick list in -f order: base, override, variants by name. Base and override ticked, variants not; with no base, a lone file is ticked |
 | Override | A dropped base file also gets its override from the same folder, ticked (explicit `-f` stops compose loading it itself) |
 | Name clash | Warn in the confirm: already running (up recreates what changed), or pinned from other files (this replaces that pin) |
 | Up options | None beyond the allow-listed `up -d --remove-orphans` |
 | After up | Closing a successful run opens `/compose/<project>` in the active tab |
-| Pins | `{ name, files }`; settings with the old `{ name, file }` still load |
-| Paths | Converted as for every run (`E:\x` to `/mnt/e/x`, `\\wsl.localhost\<distro>\x` to `/x`). In WSL mode a folder `to_wsl_path` can't convert (network shares) is refused before anything runs |
+| Pins | `{ name, files }`, saved with `file` (the first) too so 0.5.0 still reads them; the old `{ name, file }` still loads; an unreadable entry is skipped, not the whole list |
+| Paths | Converted as for every run (`E:\x` to `/mnt/e/x`, `\\wsl.localhost\<distro>\x` to `/x`). In WSL mode a folder `to_wsl_path` can't convert (network shares), or one in another distro than compose runs in, is refused before anything runs; refused folders are listed in the first confirm |
+| Pop-outs | Ignore compose drops (they show one place); Files there still copies in |
+| One at a time | The next confirm waits until the last project's pin and up have finished; drops meanwhile are ignored; each run has its own dialog |
 
 ### Work
 

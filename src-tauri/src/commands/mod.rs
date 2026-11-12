@@ -167,21 +167,48 @@ pub fn about_info(app: AppHandle) -> AboutInfo {
 /// so the UI can't ask for any other.
 #[tauri::command]
 pub fn open_project_page() -> Result<(), AppError> {
-    let program = if cfg!(windows) {
+    os_open(PROJECT_URL, false)
+}
+
+/// Hands a file, folder or web address to the OS (Explorer, `open`,
+/// `xdg-open`): opens it in its default app, or with `reveal` shows a file
+/// in its folder. Callers pass only paths and addresses they've checked.
+pub(crate) fn os_open(target: &str, reveal: bool) -> Result<(), AppError> {
+    let mut c = std::process::Command::new(if cfg!(windows) {
         "explorer.exe"
     } else if cfg!(target_os = "macos") {
         "open"
     } else {
         "xdg-open"
-    };
-    let mut child = std::process::Command::new(program)
-        .arg(PROJECT_URL)
-        .stdin(std::process::Stdio::null())
+    });
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Explorer wants /select,"path" as one argument, quoted its own way.
+        // Windows paths can't contain quotes.
+        if reveal {
+            c.raw_arg(format!("/select,\"{target}\""));
+        } else {
+            c.raw_arg(format!("\"{target}\""));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if reveal && cfg!(target_os = "macos") {
+            c.arg("-R").arg(target);
+        } else if reveal {
+            c.arg(crate::compose::parent_dir(target));
+        } else {
+            c.arg(target);
+        }
+    }
+    // Explorer's exit code means nothing, so only a failure to start counts.
+    c.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let mut child = c
         .spawn()
-        .map_err(|e| AppError::from(format!("Couldn't open {PROJECT_URL}: {e}")))?;
-    // Explorer's exit code means nothing; just don't leave it unreaped.
+        .map_err(|e| AppError::from(format!("Couldn't open {target}: {e}")))?;
     std::thread::spawn(move || child.wait());
     Ok(())
 }
