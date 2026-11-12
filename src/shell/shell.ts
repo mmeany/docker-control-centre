@@ -4,6 +4,7 @@ import type { MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
 import type { Pinned } from "../api/compose";
 import type { ContainerItem } from "../api/engine";
+import type { FileDropHandlers } from "../api/window";
 import type { TreeLevel } from "../status/filter";
 import type { Status } from "../status/status";
 import type { EngineState } from "../state/engine";
@@ -50,6 +51,12 @@ export interface Shell {
   setWorking: (msg: string | null) => void;
   openMenu: (x: number, y: number, items: MenuItem[]) => void;
   copyText: (text: string) => Promise<void>;
+  /**
+   * Takes files dropped from the OS while mounted (container Files copies
+   * them in). The latest claim wins; unclaimed drops start compose projects.
+   * Returns the release (call it in the effect cleanup).
+   */
+  claimDrops: (h: FileDropHandlers) => () => void;
 }
 
 /** What each section gives back to the shell to place on screen. */
@@ -83,4 +90,6 @@ export interface SectionUi {
   placeStatus?: (path: string) => Status | undefined;
   /** Counts for the section badges (Home). */
   attention?: { errors: number; orphans: number };
+  /** Files dropped anywhere that nothing claimed (compose: start a project). */
+  fileDrop?: (paths: string[]) => void;
 }

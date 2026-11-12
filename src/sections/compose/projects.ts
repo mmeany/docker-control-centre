@@ -28,7 +28,7 @@ export function projectsFrom(containers: ContainerItem[], pinned: Pinned[]): Pro
   for (const pin of pinned) {
     const p = map.get(pin.name);
     if (p) p.pinned = pin;
-    else map.set(pin.name, { name: pin.name, dir: parentDir(pin.file), files: [pin.file], containers: [], running: 0, pinned: pin });
+    else map.set(pin.name, { name: pin.name, dir: parentDir(pin.files[0] ?? ""), files: pin.files, containers: [], running: 0, pinned: pin });
   }
   for (const p of map.values()) p.containers.sort((a, b) => a.name.localeCompare(b.name));
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -44,8 +44,14 @@ export function parentDir(file: string): string {
  * wins; otherwise the files the project was started from.
  */
 export function targetOf(p: Project): ComposeTarget {
-  if (p.pinned) return { name: p.name, dir: parentDir(p.pinned.file), files: [p.pinned.file] };
+  if (p.pinned) return { name: p.name, dir: parentDir(p.pinned.files[0] ?? ""), files: p.pinned.files };
   return { name: p.name, dir: p.dir, files: p.files };
+}
+
+/** A pinned project's files for a list: the first, and how many more. */
+export function pinnedLabel(pin: Pinned): string {
+  const more = pin.files.length - 1;
+  return `${pin.files[0] ?? ""}${more > 0 ? ` (+${more} more)` : ""}`;
 }
 
 /** "Running", "2 of 3 running", "Stopped", "Down". */

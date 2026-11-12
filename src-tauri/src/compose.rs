@@ -294,14 +294,38 @@ pub fn is_compose_file(p: &str) -> bool {
     lower.ends_with(".yml") || lower.ends_with(".yaml")
 }
 
-/// A compose file the user pinned, so the project shows while it's down.
+/// Compose files the user pinned, so the project shows while it's down.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "PinnedSaved")]
 pub struct Pinned {
     /// Project name (from `compose config`).
     pub name: String,
-    /// As the user chose it (Windows path).
-    pub file: String,
+    /// As the user chose them (Windows paths), in -f order.
+    pub files: Vec<String>,
+}
+
+/// A pin as saved: `files`, or `file` from before multi-file pins.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PinnedSaved {
+    name: String,
+    #[serde(default)]
+    files: Vec<String>,
+    #[serde(default)]
+    file: Option<String>,
+}
+
+impl From<PinnedSaved> for Pinned {
+    fn from(s: PinnedSaved) -> Pinned {
+        let mut files = s.files;
+        if files.is_empty() {
+            files.extend(s.file);
+        }
+        Pinned {
+            name: s.name,
+            files,
+        }
+    }
 }
 
 /// The parent folder of a file path (either slash).
@@ -313,10 +337,359 @@ pub fn parent_dir(file: &str) -> String {
     }
 }
 
+/// The last part of a path (either slash).
+pub fn file_name(path: &str) -> &str {
+    path.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(path)
+}
+
+/// A folder and a name in it, with the folder's own kind of slash.
+pub fn join_path(dir: &str, name: &str) -> String {
+    let sep = if dir.contains('\\') || (!dir.starts_with('/') && dir.contains(':')) {
+        '\\'
+    } else {
+        '/'
+    };
+    let dir = dir.trim_end_matches(['/', '\\']);
+    if dir.is_empty() && sep == '/' {
+        return format!("/{name}");
+    }
+    format!("{dir}{sep}{name}")
+}
+
+/// Compose's own file names, in the order it looks for them.
+pub const DEFAULT_FILES: [&str; 4] = [
+    "compose.yaml",
+    "compose.yml",
+    "docker-compose.yaml",
+    "docker-compose.yml",
+];
+
+/// What a compose file is to the others in its folder.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub enum FileRole {
+    /// What `docker compose` reads in that folder by default.
+    Base,
+    /// `<base>.override.y(a)ml`, which compose layers on the base by default.
+    Override,
+    /// Anything else named like a compose file (`compose-dev.yml`,
+    /// `docker-compose.prod.yaml`, a second default name).
+    Variant,
+}
+
+/// `compose.yml` -> ("compose", false); `docker-compose.override.yaml` ->
+/// ("docker-compose", true); `compose-dev.yml` -> ("compose-dev", false).
+/// None for names that aren't compose files.
+fn compose_stem(name: &str) -> Option<(String, bool)> {
+    let lower = name.to_ascii_lowercase();
+    let stem = lower
+        .strip_suffix(".yml")
+        .or_else(|| lower.strip_suffix(".yaml"))?;
+    let rest = stem
+        .strip_prefix("docker-compose")
+        .or_else(|| stem.strip_prefix("compose"))?;
+    if !(rest.is_empty() || rest.starts_with('-') || rest.starts_with('.')) {
+        return None;
+    }
+    match stem.strip_suffix(".override") {
+        Some(base) if base == "compose" || base == "docker-compose" => {
+            Some((base.to_string(), true))
+        }
+        _ => Some((stem.to_string(), false)),
+    }
+}
+
+/// Whether a file name is one this app offers from a folder: compose's
+/// defaults and their overrides, and `compose-*` / `docker-compose-*` (or `.`)
+/// variants, .yml or .yaml.
+pub fn is_compose_name(name: &str) -> bool {
+    compose_stem(name).is_some()
+}
+
+/// One file offered when a compose file or folder is dropped.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidate {
+    pub path: String,
+    pub role: FileRole,
+    /// Ticked to start with.
+    pub ticked: bool,
+}
+
+/// The base file compose would pick from these names, if any.
+fn base_of<'a>(names: &[&'a str]) -> Option<&'a str> {
+    DEFAULT_FILES
+        .iter()
+        .find_map(|d| names.iter().find(|n| n.eq_ignore_ascii_case(d)).copied())
+}
+
+/// The override for a base file among these names: same stem first, then any
+/// default override.
+fn override_of<'a>(base: &str, names: &[&'a str]) -> Option<&'a str> {
+    let (stem, _) = compose_stem(base)?;
+    let overrides: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|n| matches!(compose_stem(n), Some((_, true))))
+        .collect();
+    overrides
+        .iter()
+        .find(|n| compose_stem(n).map(|(s, _)| s) == Some(stem.clone()))
+        .or_else(|| overrides.first())
+        .copied()
+}
+
+/// Puts candidates in -f order: base, override, then variants by name.
+fn ordered(mut list: Vec<Candidate>) -> Vec<Candidate> {
+    list.sort_by(|a, b| {
+        a.role.cmp(&b.role).then_with(|| {
+            file_name(&a.path)
+                .to_ascii_lowercase()
+                .cmp(&file_name(&b.path).to_ascii_lowercase())
+        })
+    });
+    list
+}
+
+/// What a dropped folder offers, from the names in it: the base file and its
+/// override ticked, variants not. With no base file, a lone candidate is
+/// ticked; several are left for the user to choose.
+pub fn folder_candidates(dir: &str, names: &[&str]) -> Vec<Candidate> {
+    let names: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|n| is_compose_name(n))
+        .collect();
+    let base = base_of(&names);
+    let over = base.and_then(|b| override_of(b, &names));
+    let lone = names.len() == 1;
+    ordered(
+        names
+            .iter()
+            .map(|n| {
+                let role = if Some(*n) == base {
+                    FileRole::Base
+                } else if Some(*n) == over {
+                    FileRole::Override
+                } else {
+                    FileRole::Variant
+                };
+                Candidate {
+                    path: join_path(dir, n),
+                    role,
+                    ticked: role != FileRole::Variant || lone,
+                }
+            })
+            .collect(),
+    )
+}
+
+/// What dropped files from one folder offer: each of them, ticked, plus the
+/// base file's override from the same folder (ticked; explicit -f files stop
+/// compose loading it on its own). `siblings` are the names in the folder.
+pub fn file_candidates(dir: &str, dropped: &[&str], siblings: &[&str]) -> Vec<Candidate> {
+    let base = base_of(dropped);
+    let mut list: Vec<Candidate> = dropped
+        .iter()
+        .map(|n| Candidate {
+            path: join_path(dir, n),
+            role: if Some(*n) == base {
+                FileRole::Base
+            } else if matches!(compose_stem(n), Some((_, true))) {
+                FileRole::Override
+            } else {
+                FileRole::Variant
+            },
+            ticked: true,
+        })
+        .collect();
+    let has_override = list.iter().any(|c| c.role == FileRole::Override);
+    if let (Some(b), false) = (base, has_override) {
+        if let Some(o) = override_of(b, siblings) {
+            list.push(Candidate {
+                path: join_path(dir, o),
+                role: FileRole::Override,
+                ticked: true,
+            });
+        }
+    }
+    ordered(list)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn picked(list: &[Candidate]) -> Vec<(&str, FileRole, bool)> {
+        list.iter()
+            .map(|c| (file_name(&c.path), c.role, c.ticked))
+            .collect()
+    }
+
+    #[test]
+    fn knows_compose_file_names() {
+        for n in [
+            "compose.yaml",
+            "compose.yml",
+            "docker-compose.yml",
+            "Docker-Compose.YAML",
+            "compose.override.yml",
+            "docker-compose.override.yaml",
+            "compose-dev.yml",
+            "docker-compose-prod.yaml",
+            "docker-compose.ci.yml",
+        ] {
+            assert!(is_compose_name(n), "{n}");
+        }
+        for n in [
+            "composer.yml",
+            "compose.json",
+            "app.yml",
+            "my-compose.yml",
+            ".env",
+            "compose",
+        ] {
+            assert!(!is_compose_name(n), "{n}");
+        }
+    }
+
+    #[test]
+    fn offers_a_folders_files() {
+        let names = [
+            "README.md",
+            "docker-compose-prod.yml",
+            "compose.override.yaml",
+            "docker-compose.yml",
+            "compose-dev.yaml",
+            ".env",
+        ];
+        let list = folder_candidates(r"E:\shop", &names);
+        assert_eq!(
+            picked(&list),
+            vec![
+                ("docker-compose.yml", FileRole::Base, true),
+                ("compose.override.yaml", FileRole::Override, true),
+                ("compose-dev.yaml", FileRole::Variant, false),
+                ("docker-compose-prod.yml", FileRole::Variant, false),
+            ]
+        );
+        assert_eq!(list[0].path, r"E:\shop\docker-compose.yml");
+
+        // compose's own order picks the base; the matching override wins.
+        let list = folder_candidates(
+            "/home/mark/app",
+            &[
+                "docker-compose.yml",
+                "compose.yaml",
+                "docker-compose.override.yml",
+                "compose.override.yml",
+            ],
+        );
+        assert_eq!(
+            picked(&list),
+            vec![
+                ("compose.yaml", FileRole::Base, true),
+                ("compose.override.yml", FileRole::Override, true),
+                ("docker-compose.override.yml", FileRole::Variant, false),
+                ("docker-compose.yml", FileRole::Variant, false),
+            ]
+        );
+        assert_eq!(list[0].path, "/home/mark/app/compose.yaml");
+
+        // No base: one variant is ticked, several are left to choose.
+        assert_eq!(
+            picked(&folder_candidates("/x", &["compose-dev.yml"])),
+            vec![("compose-dev.yml", FileRole::Variant, true)]
+        );
+        assert!(
+            folder_candidates("/x", &["compose-dev.yml", "compose-prod.yml"])
+                .iter()
+                .all(|c| !c.ticked)
+        );
+        assert!(folder_candidates("/x", &["app.yml"]).is_empty());
+    }
+
+    #[test]
+    fn adds_the_override_to_dropped_files() {
+        let siblings = [
+            "docker-compose.yml",
+            "docker-compose.override.yml",
+            "compose-dev.yml",
+        ];
+        assert_eq!(
+            picked(&file_candidates(
+                r"E:\shop",
+                &["docker-compose.yml"],
+                &siblings
+            )),
+            vec![
+                ("docker-compose.yml", FileRole::Base, true),
+                ("docker-compose.override.yml", FileRole::Override, true),
+            ]
+        );
+        // Dropped together: in -f order, and the override only once.
+        assert_eq!(
+            picked(&file_candidates(
+                r"E:\shop",
+                &[
+                    "compose-dev.yml",
+                    "docker-compose.override.yml",
+                    "docker-compose.yml"
+                ],
+                &siblings
+            )),
+            vec![
+                ("docker-compose.yml", FileRole::Base, true),
+                ("docker-compose.override.yml", FileRole::Override, true),
+                ("compose-dev.yml", FileRole::Variant, true),
+            ]
+        );
+        // A variant alone stays alone.
+        assert_eq!(
+            picked(&file_candidates(
+                r"E:\shop",
+                &["compose-dev.yml"],
+                &siblings
+            )),
+            vec![("compose-dev.yml", FileRole::Variant, true)]
+        );
+    }
+
+    #[test]
+    fn joins_paths() {
+        assert_eq!(join_path(r"E:\shop", "compose.yml"), r"E:\shop\compose.yml");
+        assert_eq!(join_path(r"E:\", "compose.yml"), r"E:\compose.yml");
+        assert_eq!(join_path("E:", "compose.yml"), r"E:\compose.yml");
+        assert_eq!(join_path("/home/x/", "compose.yml"), "/home/x/compose.yml");
+        assert_eq!(join_path("/", "compose.yml"), "/compose.yml");
+        assert_eq!(
+            join_path(r"\\wsl.localhost\Ubuntu-Dev\home", "compose.yml"),
+            r"\\wsl.localhost\Ubuntu-Dev\home\compose.yml"
+        );
+        assert_eq!(file_name(r"E:\shop\compose.yml"), "compose.yml");
+        assert_eq!(file_name("/x/y/"), "y");
+    }
+
+    #[test]
+    fn reads_old_and_new_pins() {
+        let old: Pinned =
+            serde_json::from_value(json!({"name": "shop", "file": r"E:\shop\compose.yml"}))
+                .unwrap();
+        assert_eq!(old.files, vec![r"E:\shop\compose.yml".to_string()]);
+        let new: Pinned = serde_json::from_value(
+            json!({"name": "shop", "files": ["a.yml", "b.yml"], "file": "ignored.yml"}),
+        )
+        .unwrap();
+        assert_eq!(new.files, vec!["a.yml".to_string(), "b.yml".to_string()]);
+        assert_eq!(
+            serde_json::to_value(&new).unwrap(),
+            json!({"name": "shop", "files": ["a.yml", "b.yml"]})
+        );
+    }
 
     #[test]
     fn finds_readable_paths() {

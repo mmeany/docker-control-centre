@@ -1,4 +1,4 @@
-// Compose: run verbs (in WSL or on the host), pinned files, WSL distros.
+// Compose: run verbs (in WSL or on the host), pinned files, dropped files, WSL distros.
 import { Channel } from "@tauri-apps/api/core";
 import { call, toAppError } from "./core";
 
@@ -21,8 +21,24 @@ export interface ComposeOutput {
 
 export interface Pinned {
   name: string;
-  /** As chosen (a Windows path). */
-  file: string;
+  /** As chosen (Windows paths), in -f order. */
+  files: string[];
+}
+
+/** One file offered when compose files or a folder are dropped. */
+export interface DropCandidate {
+  path: string;
+  /** base: compose's default file; override: layered on it; variant: anything else. */
+  role: "base" | "override" | "variant";
+  ticked: boolean;
+}
+
+/** One folder's worth of a drop. */
+export interface DropGroup {
+  dir: string;
+  candidates: DropCandidate[];
+  /** Why nothing from here can run. */
+  error: string | null;
 }
 
 export interface Distro {
@@ -64,7 +80,12 @@ export const composeApi = {
   showFile: (path: string, how: "folder" | "open") => call<void>("compose_show_file", { path, how }),
   distros: () => call<Distro[]>("wsl_distros"),
   pinned: () => call<Pinned[]>("compose_pinned"),
-  pin: (file: string) => call<Pinned[]>("compose_pin", { file }),
+  /** Pins one project's files (in -f order); compose must read them. */
+  pin: (files: string[]) => call<Pinned[]>("compose_pin", { files }),
+  /** The project name compose gives these files, checking they read. */
+  projectName: (files: string[]) => call<string>("compose_project_name", { files }),
+  /** Dropped files and folders as projects to confirm (nothing runs). */
+  dropCandidates: (paths: string[]) => call<DropGroup[]>("compose_drop_candidates", { paths }),
   unpin: (name: string) => call<Pinned[]>("compose_unpin", { name }),
   saveText: (path: string, text: string) => call<void>("save_text_file", { path, text }),
 };

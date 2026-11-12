@@ -10,6 +10,7 @@ import { composeApi, type Pinned } from "../api/compose";
 import type { AppError, Settings, ThemePref } from "../api/core";
 import { engineApi } from "../api/engine";
 import { streamsApi } from "../api/streams";
+import { onFileDrop, type FileDropHandlers } from "../api/window";
 import { ConfirmDialog, type ConfirmButton } from "../components/ConfirmDialog";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
@@ -261,6 +262,40 @@ export function useAppShell(): AppShell {
     [showFlash, showError],
   );
 
+  // Files dropped from the OS: one listener for the window. A mounted claim
+  // (container Files) takes them; otherwise a section's fileDrop does
+  // (compose). Ignored while a dialog is open.
+  const dropClaims = useRef<FileDropHandlers[]>([]);
+  const appDrop = useRef<((paths: string[]) => void) | undefined>(undefined);
+  const [dragging, setDragging] = useState(false);
+  const claimDrops = useCallback((h: FileDropHandlers) => {
+    dropClaims.current.push(h);
+    return () => {
+      dropClaims.current = dropClaims.current.filter((x) => x !== h);
+    };
+  }, []);
+  useEffect(() => {
+    const claim = () => dropClaims.current[dropClaims.current.length - 1];
+    const inDialog = () => document.querySelector("[role=dialog], [role=alertdialog]") !== null;
+    return onFileDrop({
+      over: (x, y) => {
+        const c = claim();
+        if (c) c.over(x, y);
+        else setDragging(!inDialog() && appDrop.current !== undefined);
+      },
+      leave: () => {
+        claim()?.leave();
+        setDragging(false);
+      },
+      drop: (paths, x, y) => {
+        setDragging(false);
+        const c = claim();
+        if (c) c.drop(paths, x, y);
+        else if (!inDialog()) appDrop.current?.(paths);
+      },
+    });
+  }, []);
+
   const shell: Shell = {
     place,
     navigate: nav.navigate,
@@ -289,6 +324,7 @@ export function useAppShell(): AppShell {
     setWorking,
     openMenu: (x, y, items) => setMenu({ x, y, items }),
     copyText,
+    claimDrops,
   };
 
   // ---------------------------------------------------------------------------
@@ -301,6 +337,7 @@ export function useAppShell(): AppShell {
   }
   const activeDef = sectionOf(place);
   const active: SectionUi | null = activeDef ? sectionUis[activeDef.id] : null;
+  appDrop.current = Object.values(sectionUis).find((s) => s.fileDrop)?.fileDrop;
 
   // ---------------------------------------------------------------------------
   // Navigation
@@ -435,6 +472,11 @@ export function useAppShell(): AppShell {
 
   const overlays = (
     <>
+      {dragging && (
+        <div className="drop-overlay" aria-hidden>
+          <div className="drop-overlay-note">Drop a compose file or folder to start it</div>
+        </div>
+      )}
       {legendOpen && <LegendDialog onClose={() => setLegendOpen(false)} />}
       {settingsOpen && settings && (
         <SettingsDialog
