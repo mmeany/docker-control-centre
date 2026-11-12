@@ -288,53 +288,22 @@ pub async fn compose_show_file(
         "open" => false,
         _ => return Err(AppError::invalid("Show the folder or open the file.")),
     };
-    let mut c = std::process::Command::new(if cfg!(windows) {
-        "explorer.exe"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    });
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        // Explorer wants /select,"path" as one argument, quoted its own way.
-        // Windows paths can't contain quotes.
-        if folder {
-            c.raw_arg(format!("/select,\"{local}\""));
-        } else {
-            c.raw_arg(format!("\"{local}\""));
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        if folder && cfg!(target_os = "macos") {
-            c.arg("-R").arg(&local);
-        } else if folder {
-            c.arg(compose::parent_dir(&local));
-        } else {
-            c.arg(&local);
-        }
-    }
-    // Explorer's exit code means nothing, so only a failure to start counts.
-    c.stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    let mut child = c
-        .spawn()
-        .map_err(|e| AppError::from(format!("Couldn't open {local}: {e}")))?;
-    std::thread::spawn(move || child.wait());
-    Ok(())
+    super::os_open(&local, folder)
 }
 
+/// Pinned files from settings; an entry that can't be read is skipped, so
+/// it can't take the rest with it when the list is next saved.
 fn pinned_list(state: &AppState) -> Vec<Pinned> {
-    state
-        .settings
-        .load()
-        .values
-        .get(compose::PINNED_KEY)
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default()
+    compose::read_pins(state.settings.load().values.get(compose::PINNED_KEY))
+}
+
+/// The distro compose runs in when it runs in WSL (the chosen one, else
+/// WSL's default); None on the host.
+async fn wsl_runs_in(state: &AppState) -> Option<String> {
+    match runner(state) {
+        Runner::Wsl { .. } => read_distro(state).await,
+        Runner::Host => None,
+    }
 }
 
 fn save_pinned(state: &AppState, list: &[Pinned]) -> Result<Vec<Pinned>, AppError> {
@@ -356,6 +325,10 @@ async fn project_name(state: &AppState, files: &[String]) -> Result<String, AppE
     let first = files
         .first()
         .ok_or_else(|| AppError::invalid("Choose at least one compose file."))?;
+    let runs_in = wsl_runs_in(state).await;
+    for f in files {
+        compose::check_distro(f, runs_in.as_deref())?;
+    }
     let target = Target {
         name: None,
         dir: compose::parent_dir(first),
@@ -500,12 +473,20 @@ pub async fn compose_drop_candidates(
         });
     }
     if wsl {
+        let runs_in = wsl_runs_in(&state).await;
         for g in groups.iter_mut().filter(|g| g.error.is_none()) {
-            if compose::to_wsl_path(&g.dir).is_none() {
-                g.error = Some(format!(
+            let error = if compose::to_wsl_path(&g.dir).is_none() {
+                Some(format!(
                     "WSL can't open {}. Compose runs in WSL (Settings), which reaches local drives and WSL folders, not network shares.",
                     g.dir
-                ));
+                ))
+            } else {
+                compose::check_distro(&g.dir, runs_in.as_deref())
+                    .err()
+                    .map(|e| e.message)
+            };
+            if error.is_some() {
+                g.error = error;
                 g.candidates.clear();
             }
         }

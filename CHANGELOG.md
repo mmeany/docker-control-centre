@@ -10,9 +10,15 @@
   project name compose gives them, says if compose can't read them, and
   warns when the project is already running or pinned from other files.
   Start pins the files and runs up; closing the output opens the project.
-  Several folders are confirmed in turn. Folders WSL can't reach (network
-  shares) are refused before anything runs.
-- Pins hold a project's list of files (older single-file pins still load).
+  Several folders are confirmed in turn, each after the last one's up has
+  finished. Folders compose can't run (network shares, or a folder in a
+  different WSL distro than compose runs in) are left out, and the first
+  confirm says why. The base and override files offered are the ones
+  compose itself would pick. Drops are ignored while a dialog is open and
+  in pop-out windows.
+- Pins hold a project's list of files (older single-file pins still load,
+  and pins are still saved so 0.5.0 can read them). A pin that can't be
+  read is skipped instead of emptying the list.
 - **About** (Help menu) says what the app does, its version and engine, and
   links to the GitHub project, where bugs and feature requests go.
 

@@ -363,7 +363,8 @@
       return folderName(a.files[0]);
     },
     // A .yml is a dropped file (an override sits beside a base file); a path
-    // with "nas" is a network share WSL can't reach; another name with an
+    // with "nas" is a network share WSL can't reach, one with "Debian" is in
+    // another WSL distro; another name with an
     // extension isn't compose; anything else is a folder holding a base file,
     // its override and two variants.
     compose_drop_candidates: (a) => {
@@ -374,6 +375,7 @@
           const dir = p.slice(0, Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/")));
           (files[dir] = files[dir] || []).push(p);
         } else if (p.includes("nas")) groups.push({ dir: p, candidates: [], error: `WSL can't open ${p}. Compose runs in WSL (Settings), which reaches local drives and WSL folders, not network shares.` });
+        else if (p.includes("Debian")) groups.push({ dir: p, candidates: [], error: `${p} is in Debian, but compose runs in Ubuntu-Dev (Settings).` });
         else if (/\.\w+$/.test(p)) continue;
         else
           groups.push({
@@ -445,6 +447,8 @@
   };
 
   window.__mock = {};
+  /** The default handlers, for a scenario's override to wrap. */
+  window.__handlers = handlers;
   window.__calls = [];
   const callbacks = {};
   let nextId = 1;
