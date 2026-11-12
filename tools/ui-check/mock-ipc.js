@@ -106,6 +106,8 @@
     pick_folder: () => null,
     pick_open_file: () => "E:\\projects\\wiki\\compose.yml",
     pick_save_file: () => null,
+    about_info: () => ({ name: "Docker Control Centre", version: window.__APP_VERSION__ || "unknown", projectUrl: "https://github.com/mmeany/docker-control-centre" }),
+    open_project_page: () => null,
     engine_info: () => ({
       name: "ubuntu-dev",
       endpoint: "tcp://localhost:2375",

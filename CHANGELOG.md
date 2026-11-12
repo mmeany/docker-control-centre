@@ -13,6 +13,8 @@
   Several folders are confirmed in turn. Folders WSL can't reach (network
   shares) are refused before anything runs.
 - Pins hold a project's list of files (older single-file pins still load).
+- **About** (Help menu) says what the app does, its version and engine, and
+  links to the GitHub project, where bugs and feature requests go.
 
 ## 0.5.0 (2026-11-07)
 

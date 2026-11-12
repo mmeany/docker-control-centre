@@ -4,13 +4,13 @@
 // shortcuts, status-bar text and the shared dialogs. A layout component
 // (ExplorerLayout) takes what this returns and places it on screen.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getVersion } from "@tauri-apps/api/app";
 import { appApi } from "../api/app";
 import { composeApi, type Pinned } from "../api/compose";
 import type { AppError, Settings, ThemePref } from "../api/core";
 import { engineApi } from "../api/engine";
 import { streamsApi } from "../api/streams";
 import { onFileDrop, type FileDropHandlers } from "../api/window";
+import { AboutDialog } from "../components/AboutDialog";
 import { ConfirmDialog, type ConfirmButton } from "../components/ConfirmDialog";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
@@ -122,6 +122,7 @@ export function useAppShell(): AppShell {
   const [editAddress, setEditAddress] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const nav = useTabs<Place>(POPOUT_PLACE ?? HOME, samePlace);
   const place = nav.current;
   const engine = useEngine();
@@ -439,26 +440,6 @@ export function useAppShell(): AppShell {
   );
   const connectionTitle = engine.status === "connected" ? `Connected to ${endpoint}` : engine.message;
 
-  async function showAbout() {
-    let version = "development build";
-    try {
-      version = `version ${await getVersion()}`;
-    } catch {
-      /* not running in Tauri */
-    }
-    await ask(
-      "About Docker Control Centre",
-      <>
-        <p>
-          Docker Control Centre, {version}. Manage a Docker engine the way File Explorer manages files.
-        </p>
-        <p className="hint">MIT or Apache-2.0. Connected to {engine.info?.endpoint ?? "no engine"}.</p>
-      </>,
-      [{ label: "OK", value: "ok", primary: true }],
-      "ok",
-    );
-  }
-
   const openHelp = (x: number, y: number) =>
     setMenu({
       x,
@@ -466,7 +447,7 @@ export function useAppShell(): AppShell {
       items: [
         { label: "What the colours mean…", onClick: () => setLegendOpen(true) },
         "separator",
-        { label: "About Docker Control Centre", onClick: () => void showAbout() },
+        { label: "About Docker Control Centre", onClick: () => setAboutOpen(true) },
       ],
     });
 
@@ -478,6 +459,7 @@ export function useAppShell(): AppShell {
         </div>
       )}
       {legendOpen && <LegendDialog onClose={() => setLegendOpen(false)} />}
+      {aboutOpen && <AboutDialog endpoint={engine.info?.endpoint ?? null} onClose={() => setAboutOpen(false)} onError={showError} />}
       {settingsOpen && settings && (
         <SettingsDialog
           settings={settings}

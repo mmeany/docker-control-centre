@@ -337,6 +337,15 @@ button { font: inherit; color: inherit; }
 .link-btn { border: none; background: none; color: var(--focus); padding: 2px 6px; }
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
 .link-btn:disabled { color: var(--disabled); }
+
+/* ---------- About ---------- */
+.about-dialog { width: 520px; max-width: calc(100vw - 40px); }
+.about-body { gap: 8px; }
+.about-body p { margin: 0; line-height: 1.5; user-select: text; }
+.about-name { font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
+.about-version { font-size: 12px; font-weight: normal; color: var(--muted); user-select: text; }
+.about-link { padding: 2px 0; }
+.about-credit { font-style: italic; }
 /* ---------- Context menu ---------- */
 .context-menu {
   position: fixed; z-index: 20; min-width: 220px; padding: 3px 0;
