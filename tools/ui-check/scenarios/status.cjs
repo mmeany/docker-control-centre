@@ -70,9 +70,17 @@ module.exports = async (page, { shot }) => {
   await shot("legend");
   await page.keyboard.press("Escape");
 
-  // About shows the version from package.json.
+  // About shows the version from package.json, where to report issues (the
+  // link opens the project page) and the credit.
   const { version } = require("../../../package.json");
   await page.click(".cmd-btn:has-text('Help')");
   await page.click(".cm-item:has-text('About Docker Control Centre')");
-  await page.waitForSelector(`.dialog:has-text('version ${version}.')`);
+  await page.waitForSelector(`.about-dialog .about-version:text-is('version ${version}')`);
+  await page.waitForSelector(".about-dialog:has-text('report bugs and request features')");
+  await page.waitForSelector(".about-dialog .about-credit:text-is('Lovingly created by Claude Code under the direction of Mark Meany.')");
+  await shot("about");
+  await page.click(".about-link:has-text('github.com/mmeany/docker-control-centre')");
+  await page.waitForFunction(() => window.__calls.some(([c]) => c === "open_project_page"));
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".about-dialog", { state: "detached" });
 };

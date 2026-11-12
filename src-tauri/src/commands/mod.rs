@@ -137,6 +137,55 @@ pub async fn pick_open_file(
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// The project's home: source, releases, and where bugs and feature requests go.
+pub const PROJECT_URL: &str = "https://github.com/mmeany/docker-control-centre";
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AboutInfo {
+    name: String,
+    version: String,
+    project_url: &'static str,
+}
+
+/// Name and version (from tauri.conf.json) and the project address, for About.
+#[tauri::command]
+pub fn about_info(app: AppHandle) -> AboutInfo {
+    let info = app.package_info();
+    AboutInfo {
+        name: app
+            .config()
+            .product_name
+            .clone()
+            .unwrap_or_else(|| info.name.clone()),
+        version: info.version.to_string(),
+        project_url: PROJECT_URL,
+    }
+}
+
+/// Opens the project page in the default browser. The address is fixed here,
+/// so the UI can't ask for any other.
+#[tauri::command]
+pub fn open_project_page() -> Result<(), AppError> {
+    let program = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let mut child = std::process::Command::new(program)
+        .arg(PROJECT_URL)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| AppError::from(format!("Couldn't open {PROJECT_URL}: {e}")))?;
+    // Explorer's exit code means nothing; just don't leave it unreaped.
+    std::thread::spawn(move || child.wait());
+    Ok(())
+}
+
 /// Save-as dialog (asks about overwriting itself). None when cancelled.
 #[tauri::command]
 pub async fn pick_save_file(app: AppHandle, title: String, default_name: String) -> Option<String> {

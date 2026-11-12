@@ -1,4 +1,4 @@
-// App-level commands: settings, remembered filters and values, native dialogs.
+// App-level commands: settings, remembered filters and values, native dialogs, About.
 import { call, type Settings, type ThemePref } from "./core";
 
 export const appApi = {
@@ -16,4 +16,15 @@ export const appApi = {
   pickOpenFile: (title: string, filterName: string, extensions: string[]) =>
     call<string | null>("pick_open_file", { title, filterName, extensions }),
   pickSaveFile: (title: string, defaultName: string) => call<string | null>("pick_save_file", { title, defaultName }),
+
+  /** Name, version and project address for About. */
+  aboutInfo: () => call<AboutInfo>("about_info"),
+  /** Opens the project page (a fixed address) in the default browser. */
+  openProjectPage: () => call<void>("open_project_page"),
 };
+
+export interface AboutInfo {
+  name: string;
+  version: string;
+  projectUrl: string;
+}

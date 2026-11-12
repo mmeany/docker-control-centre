@@ -47,6 +47,8 @@ pub fn run() {
             commands::pick_folder,
             commands::pick_open_file,
             commands::pick_save_file,
+            commands::about_info,
+            commands::open_project_page,
             commands::engine::engine_info,
             commands::engine::list_containers,
             commands::engine::watch_engine,

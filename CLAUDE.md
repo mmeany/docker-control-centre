@@ -126,7 +126,7 @@ src/shell/shell.ts          Shell (what sections may ask of the app: navigate,
 src/shell/places.ts         Place = { section | null (Home), path }; crumbs, parent, uri,
                             parseAddress
 src/api/core.ts             `call` (invoke wrapper), AppError, Settings
-src/api/app.ts              settings, filter history, values, native dialogs
+src/api/app.ts              settings, filter history, values, native dialogs, About info
 src/api/engine.ts           engine info, containers, the change feed (Channel)
 src/api/streams.ts          logs, terminal, stats, stats totals channels; pop-out
 src/api/resources.ts        images (pull channel), volumes, networks
@@ -195,6 +195,10 @@ docs/                       WSL-SETUP.md, screenshots (from ui:check)
   Format / Minify, optional masking), `DataTree` (expand all / to level, big
   arrays paged), `MaskedValue` (Reveal / Copy for secrets: plaintext only in
   component state), `DiffView` + `util/diff.ts`.
+- `AboutDialog` (Help › About): name and version from `about_info`, the
+  GitHub link (bugs and feature requests go there; `open_project_page`
+  opens the fixed `PROJECT_URL` in Rust) and, last, the line "Lovingly
+  created by Claude Code under the direction of Mark Meany." Keep both.
 - `ErrorPanel` (in place of content, with Retry), `StatusBar`, `Toolbar`, `Icons`
   (inline SVG).
 - CSS building blocks: `.section-pane`, `.filter-bar`, `.detail-view` +
