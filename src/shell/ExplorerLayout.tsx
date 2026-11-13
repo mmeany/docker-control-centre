@@ -85,6 +85,7 @@ export function ExplorerLayout({ app }: { app: AppShell }) {
     active.content
   ) : (
     <FileList
+      columnsKey="home"
       columns={HOME_COLUMNS}
       rows={homeRows}
       selected={homeSelected}

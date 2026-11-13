@@ -564,6 +564,7 @@ export function useContainersSection(shell: Shell): SectionUi {
     const list = (emptyText: string) => (
       <FileList
         key={path}
+        columnsKey={loc?.kind === "container" ? "containers.children" : "containers"}
         columns={loc?.kind === "container" ? CHILD_COLUMNS : COLUMNS}
         rows={rows}
         selected={selected}

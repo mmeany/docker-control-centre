@@ -179,7 +179,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
     else if (volumes.items === null) content = <div className="empty-note">{engine.status === "connected" ? "Loading…" : engine.message || "Not connected to the engine."}</div>;
     else if (!path) {
       content = (
-        <FileList columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No volumes." view={shell.view} />
+        <FileList columnsKey="volumes" columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No volumes." view={shell.view} />
       );
       board = (
         <Board

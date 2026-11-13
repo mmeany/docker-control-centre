@@ -178,7 +178,7 @@ export function useNetworksSection(shell: Shell): SectionUi {
     else if (networks.items === null) content = <div className="empty-note">{engine.status === "connected" ? "Loading…" : engine.message || "Not connected to the engine."}</div>;
     else if (!path) {
       content = (
-        <FileList columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No networks." view={shell.view} />
+        <FileList columnsKey="networks" columns={COLUMNS} rows={rows} selected={selected} onSelectionChange={setSelected} onOpen={go} onContextMenu={openMenu} emptyText="No networks." view={shell.view} />
       );
       board = (
         <Board
