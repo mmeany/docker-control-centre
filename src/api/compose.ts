@@ -1,6 +1,7 @@
 // Compose: run verbs (in WSL or on the host), pinned files, dropped files, WSL distros.
 import { Channel } from "@tauri-apps/api/core";
 import { call, toAppError } from "./core";
+import type { AnonymousCause } from "./engine";
 
 /** A project to run compose against: its folder and files (Windows or Linux paths). */
 export interface ComposeTarget {
@@ -55,6 +56,29 @@ export interface ComposeFile {
   size: number;
 }
 
+/** An anonymous volume a project's service gets (or will get). */
+export interface UnnamedVolume {
+  service: string;
+  /** The path in the container. */
+  target: string;
+  cause: AnonymousCause;
+  /** What its containers hold now, one per container. */
+  current: { container: string; volume: string }[];
+  /** Proposed key under the top-level volumes:. */
+  key: string;
+  /** Proposed name: (what the volumes list shows). */
+  name: string;
+}
+
+export interface UnnamedVolumes {
+  project: string;
+  findings: UnnamedVolume[];
+  /** Services whose image isn't on the engine, so its VOLUMEs can't be checked. */
+  unchecked: { service: string; image: string; build: boolean }[];
+  /** Compose couldn't read the files: findings come from the containers only. */
+  configError: string | null;
+}
+
 /** Settings keys (values). */
 export const COMPOSE_MODE_KEY = "compose.mode";
 export const COMPOSE_DISTRO_KEY = "compose.distro";
@@ -74,6 +98,8 @@ export const composeApi = {
   version: () => call<ComposeOutput>("compose_check", { target: null, verb: "version" }),
   /** `docker compose config` as YAML: the merged file with variables filled in (may hold secrets). */
   resolved: (target: ComposeTarget) => call<ComposeOutput>("compose_check", { target, verb: "config-yaml" }),
+  /** The project's anonymous volumes: from its config, its images' VOLUMEs and its containers. */
+  unnamedVolumes: (target: ComposeTarget) => call<UnnamedVolumes>("compose_unnamed_volumes", { target }),
   /** A project's compose file (an engine-side or Windows path), up to 1 MB. */
   readFile: (path: string) => call<ComposeFile>("compose_read_file", { path }),
   /** Shows the file in Explorer ("folder") or opens it in its default app ("open"). */

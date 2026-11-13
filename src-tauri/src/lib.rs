@@ -13,6 +13,7 @@ mod stats_totals;
 mod streams;
 mod tar;
 mod util;
+mod volume_audit;
 mod window;
 
 use commands::AppState;
@@ -78,6 +79,7 @@ pub fn run() {
             commands::compose::compose_unpin,
             commands::compose::compose_read_file,
             commands::compose::compose_show_file,
+            commands::compose::compose_unnamed_volumes,
             commands::compose::save_text_file,
             commands::resources::list_images,
             commands::resources::inspect_image,

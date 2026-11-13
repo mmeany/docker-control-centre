@@ -1,6 +1,7 @@
 //! Container actions and the inspect view, mapped to plain data for the UI.
 
 use crate::engine::{short_id, LABEL_PROJECT, LABEL_SERVICE, LABEL_WORKING_DIR};
+use crate::volume_audit::{cause_of, is_anonymous_name, AnonymousCause};
 use bollard::models::{ContainerInspectResponse, EndpointSettings, MountPoint, PortBinding};
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
 use bollard::Docker;
@@ -90,6 +91,8 @@ pub struct MountInfo {
     pub destination: String,
     pub mode: String,
     pub read_write: bool,
+    /// Why Docker made it, for an anonymous volume; None otherwise.
+    pub anonymous: Option<AnonymousCause>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -148,6 +151,14 @@ pub struct ContainerDetails {
     pub networks: Vec<NetworkInfo>,
 }
 
+/// Fills in why each anonymous volume was made, from the image's `VOLUME`
+/// paths (None when the image couldn't be read: the cause stays unknown).
+pub fn set_mount_causes(d: &mut ContainerDetails, image_volumes: Option<&[String]>) {
+    for m in d.mounts.iter_mut().filter(|m| m.anonymous.is_some()) {
+        m.anonymous = Some(cause_of(&m.destination, image_volumes));
+    }
+}
+
 /// Docker's zero time means "never".
 fn when(t: Option<String>) -> String {
     t.filter(|s| !s.starts_with("0001-01-01"))
@@ -194,9 +205,13 @@ fn sorted_pairs(m: HashMap<String, String>) -> Vec<KeyValue> {
 }
 
 fn mount_info(m: MountPoint) -> MountInfo {
+    let kind = m.typ.map(|t| t.to_string()).unwrap_or_default();
+    let name = m.name.unwrap_or_default();
     MountInfo {
-        kind: m.typ.unwrap_or_default(),
-        name: m.name.unwrap_or_default(),
+        anonymous: (kind == "volume" && is_anonymous_name(&name))
+            .then_some(AnonymousCause::Unknown),
+        kind,
+        name,
         source: m.source.unwrap_or_default(),
         destination: m.destination.unwrap_or_default(),
         mode: m.mode.unwrap_or_default(),
@@ -500,6 +515,31 @@ mod tests {
         assert_eq!(d.networks[0].aliases, vec!["shop-web-1", "web"]);
         assert_eq!(d.mounts[0].kind, "bind");
         assert!(!d.mounts[0].read_write);
+        assert_eq!(d.mounts[0].anonymous, None);
+    }
+
+    #[test]
+    fn marks_anonymous_volumes_with_their_cause() {
+        let vol = |name: &str, dest: &str| MountPoint {
+            typ: Some("volume".into()),
+            name: Some(name.into()),
+            destination: Some(dest.into()),
+            ..Default::default()
+        };
+        let mut d = container_details(ContainerInspectResponse {
+            mounts: Some(vec![
+                vol(&"a".repeat(64), "/var/lib/postgresql/data"),
+                vol(&"b".repeat(64), "/cache"),
+                vol("shop_pgdata", "/srv"),
+            ]),
+            ..Default::default()
+        });
+        assert_eq!(d.mounts[0].anonymous, Some(AnonymousCause::Unknown));
+        assert_eq!(d.mounts[2].anonymous, None);
+        set_mount_causes(&mut d, Some(&["/var/lib/postgresql/data".to_string()]));
+        assert_eq!(d.mounts[0].anonymous, Some(AnonymousCause::Image));
+        assert_eq!(d.mounts[1].anonymous, Some(AnonymousCause::NoSource));
+        assert_eq!(d.mounts[2].anonymous, None);
     }
 
     #[test]

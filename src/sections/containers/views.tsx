@@ -10,6 +10,7 @@ import { formatDate } from "../../format";
 import type { ChildId } from "./paths";
 import { portsText } from "./ports";
 import { ResizableTable } from "../../components/ResizableTable";
+import { CAUSE_NOTE, CAUSE_TEXT, shortHash } from "../volumes/anonymous";
 
 /** Environment variables whose values are hidden until revealed. */
 const SECRET = /pass|secret|token|key|credential|private|auth/i;
@@ -64,11 +65,27 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
       body = (
         <Table
           tableKey="mounts"
-          head={[["type", "Type"], ["source", "Source"], ["destination", "Destination"], ["access", "Access"]]}
-          rows={d.mounts.map((m) => [m.kind, m.name || m.source, m.destination, m.readWrite ? "Read / write" : "Read only"])}
+          head={[["type", "Type"], ["source", "Source"], ["destination", "Destination"], ["access", "Access"], ["anonymous", "Unnamed"]]}
+          rows={d.mounts.map((m) => [
+            m.kind,
+            m.anonymous ? <span title={m.name}>{shortHash(m.name)} (anonymous)</span> : m.name || m.source,
+            m.destination,
+            m.readWrite ? "Read / write" : "Read only",
+            m.anonymous ? <span title={CAUSE_NOTE[m.anonymous]}>{CAUSE_TEXT[m.anonymous]}</span> : "",
+          ])}
           empty="No volumes or bind mounts."
         />
       );
+      if (d.mounts.some((m) => m.anonymous))
+        body = (
+          <>
+            <p className="hint">
+              Anonymous volumes have no name: Docker made them because nothing named a volume at that path. Their data outlives the container, but they're hard to
+              tell apart in the volumes list. Hover over the Unnamed column to see why each was made.
+            </p>
+            {body}
+          </>
+        );
       break;
     case "ports":
       body = (

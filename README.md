@@ -37,6 +37,9 @@ navigation, a live overview and cards instead.
   containers use it), delete, and prune with a preview of exactly what goes.
 - **Volumes:** which containers use each, delete (type the name to confirm:
   the data is gone for good), prune unused or only anonymous volumes.
+  Anonymous volumes are shown by the container and path that mount them,
+  and a container's Mounts say why Docker made each (an image `VOLUME`, or
+  a volume asked for with no name).
 - **Networks:** subnets, attached containers, delete and prune; Docker's own
   networks are left alone.
 

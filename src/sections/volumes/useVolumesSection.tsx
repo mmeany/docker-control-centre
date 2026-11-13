@@ -16,6 +16,7 @@ import { ResourceTree } from "../ResourceTree";
 import { flatPaths, NAME_KEY, orphanedVolumes, unusedVolumes, volumeUsers } from "../rules";
 import { StatusMark } from "../../components/StatusMark";
 import { volumeStatus } from "../../status/status";
+import { mountedAt, volumeLabel } from "./anonymous";
 
 const SECTION = "volumes";
 export const volumesPaths = flatPaths((s) => NAME_KEY.test(s));
@@ -28,9 +29,6 @@ const COLUMNS: Column[] = [
   { id: "created", label: "Created", width: 150 },
 ];
 
-/** Long anonymous names are hashes: show the start. */
-const label = (v: VolumeItem) => (v.anonymous && v.name.length > 20 ? `${v.name.slice(0, 12)}… (anonymous)` : v.name);
-
 export function useVolumesSection(shell: Shell): SectionUi {
   const { place, engine, copyText } = shell;
   const active = place.section === SECTION;
@@ -39,6 +37,8 @@ export function useVolumesSection(shell: Shell): SectionUi {
 
   const volumes = useEngineList(engine, engine.changes.volume, resourcesApi.listVolumes);
   const containers = shell.containers.items ?? [];
+  /** Anonymous volumes go by who mounts them (their names are hashes). */
+  const label = (v: VolumeItem) => volumeLabel(v, containers);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
   const selected = selection.path === path ? selection.keys : new Set<string>();
   const setSelected = (keys: Set<string>) => setSelection({ path, keys });
@@ -117,7 +117,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
           isContainer: false,
           status: statusOf(v),
           cells: {
-            name: { text: label(v), sort: `${v.anonymous ? LAST : ""}${v.name.toLowerCase()}` },
+            name: { text: label(v), sort: `${v.anonymous ? LAST : ""}${v.name.toLowerCase()}`, title: v.anonymous ? v.name : undefined },
             project: { text: v.project ?? "", sort: v.project ?? "" },
             used: { text: users.map((c) => c.name).join(", "), sort: users.length },
             driver: { text: v.driver, sort: v.driver },
@@ -202,7 +202,7 @@ export function useVolumesSection(shell: Shell): SectionUi {
       content = (
         <div className="section-pane">
           <div className="detail-view" style={{ overflow: "auto" }}>
-            <VolumeProps v={current} />
+            <VolumeProps v={current} mountedAt={current.anonymous ? mountedAt(containers, current.name).join(", ") : undefined} />
             <h3>Used by</h3>
             <UsedBy containers={volumeUsers(containers, current.name)} shell={shell} what="volume" />
             {current.labels.length > 0 && (
@@ -233,7 +233,11 @@ export function useVolumesSection(shell: Shell): SectionUi {
           <div className="details-sub">{paneItem.anonymous ? "Anonymous volume" : "Volume"}</div>
         </div>
       </div>
-      <VolumeProps v={paneItem} usedBy={volumeUsers(containers, paneItem.name).map((c) => c.name).join(", ") || "Nothing"} />
+      <VolumeProps
+        v={paneItem}
+        usedBy={volumeUsers(containers, paneItem.name).map((c) => c.name).join(", ") || "Nothing"}
+        mountedAt={paneItem.anonymous ? mountedAt(containers, paneItem.name).join(", ") : undefined}
+      />
     </>
   ) : undefined;
 
@@ -256,12 +260,13 @@ export function useVolumesSection(shell: Shell): SectionUi {
   };
 }
 
-function VolumeProps({ v, usedBy }: { v: VolumeItem; usedBy?: string }) {
+function VolumeProps({ v, usedBy, mountedAt }: { v: VolumeItem; usedBy?: string; mountedAt?: string }) {
   return (
     <PropsTable
       rows={[
         ["Name", <span className="mono">{v.name}</span>],
         ["Used by", usedBy],
+        ["Mounted at", mountedAt && <span className="mono">{mountedAt}</span>],
         ["Project", v.project],
         ["Driver", v.driver],
         ["Scope", v.scope],

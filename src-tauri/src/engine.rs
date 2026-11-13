@@ -209,8 +209,18 @@ pub struct ContainerItem {
     pub config_files: Vec<String>,
     /// Named or anonymous volumes it mounts (not bind mounts).
     pub volumes: Vec<String>,
+    /// The same volumes with where each is mounted, in the same order.
+    pub volume_mounts: Vec<VolumeMount>,
     /// Networks it's attached to, by name.
     pub networks: Vec<String>,
+}
+
+/// A volume and the path it's mounted at in the container.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeMount {
+    pub name: String,
+    pub destination: String,
 }
 
 pub fn container_item(c: ContainerSummary) -> ContainerItem {
@@ -228,13 +238,19 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         .and_then(|s| u64::try_from(s).ok())
         .map(|s| crate::util::iso8601(SystemTime::UNIX_EPOCH + Duration::from_secs(s)))
         .unwrap_or_default();
-    let volumes = c
+    let volume_mounts: Vec<VolumeMount> = c
         .mounts
         .unwrap_or_default()
         .into_iter()
         .filter(|m| m.typ.as_deref() == Some("volume"))
-        .filter_map(|m| m.name)
+        .filter_map(|m| {
+            Some(VolumeMount {
+                name: m.name?,
+                destination: m.destination.unwrap_or_default(),
+            })
+        })
         .collect();
+    let volumes = volume_mounts.iter().map(|m| m.name.clone()).collect();
     let mut networks: Vec<String> = c
         .network_settings
         .and_then(|n| n.networks)
@@ -254,6 +270,7 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         image: c.image.unwrap_or_default(),
         image_id: c.image_id.unwrap_or_default(),
         volumes,
+        volume_mounts,
         networks,
         state: c.state.map(|s| s.to_string()).unwrap_or_default(),
         status,

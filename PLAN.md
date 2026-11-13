@@ -494,3 +494,59 @@ reset), plus show / hide and a last column that fills the pane.
   resize, fit and the header menu; the Settings topic the reset.
 - Docs: README, CLAUDE.md (FileList's `columnsKey`, the `columns.*`
   values, code layout).
+
+## M15: Unnamed volumes (agreed 2026-11-13)
+
+See the volumes Docker made for a container because nothing named them,
+and for a compose project get a revised file that names them, so they're
+easy to find in the volumes list. Optionally move their data across and
+bring the project back up on the named volumes.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| What counts | An anonymous volume (`resources::is_anonymous`: the `com.docker.volume.anonymous` label, or a 64-hex name). Two causes: an image `VOLUME` nothing mounts over (postgres, mysql, redis...), or a compose entry with no source (short `- /data`, long `type: volume` without `source`). Bind mounts, tmpfs and named volumes don't count. `volumes_from` is out of scope |
+| Containers | Any container, compose or not: the Mounts tab marks anonymous rows with their cause (the destination is in the image's `Config.Volumes`: "Image VOLUME"; otherwise "Created without a name"). Show only: no recreate for plain `docker run` containers |
+| Volumes list | Anonymous volumes show who mounts them (`shop-db-1:/var/lib/postgresql/data (anonymous)`) instead of only the hash start; the hash stays in the details pane and tooltip. Needs each mount's destination in `ContainerItem` (today `volumes` is names only) |
+| Compose detection | In Rust, per service: the anonymous mounts on its containers (if any exist), plus image `VOLUME` paths no service volume targets, plus compose entries with no source. Services and targets come from `compose config --format json`, parsed in Rust; only service names, images, targets and the findings cross to the UI (the config can hold .env values: never kept, as for the Resolved tab) |
+| Images not local | An image that isn't pulled (or a `build:` service not yet built) can't be checked: the service shows "Pull to check" / "Build to check". Nothing is pulled or built automatically |
+| Project view | A new child, `/compose/<project>/volumes`, beside `file`: a FileList (`columnsKey` `compose.volumes`) of every unnamed volume in the project: service, path in container, cause, current volume (if any), proposed name. Dashboard: a board for the same rows. The project's details pane gives the count |
+| Naming | An explicit `name:` under top-level `volumes:`, so the volume is called exactly what the file says. Key `<service>-<last path segment>` (`db-data`), name `<project>-<service>-<last segment>` (`shop-db-data`), cleaned to Docker's volume-name rules. Both editable in the dialog; a name already used by another volume, or a key already in the file, is flagged and blocks saving |
+| Which file | The file that defines the service's `volumes:`; if none does, the file that defines the service. The top-level `volumes:` entries go in the same file. Each changed file is its own tab in the dialog |
+| How the file is changed | A text edit in Rust (no YAML crate), so comments and layout survive: append `- <key>:<path>` to the service's block `volumes:` list (creating the key at the service's child indent if missing), replace a `- /data` line, add `source: <key>` to a long-form entry, and add `<key>:` + `name:` under the top-level `volumes:` (created at the end of the file if missing). Indent follows the file's own. Anything it can't edit safely (flow style `[...]`, anchors / aliases / `<<:` merges, `extends`, a target written with `${...}`) is left out of the edit and shown as a snippet to add by hand |
+| Output | A diff (`DiffView`) of original against revised per file, with Copy, Save as…, and Save in place. Save in place writes `<file>.bak` first (replacing an older `.bak` after a confirm), writes atomically, and refuses if the file changed since it was read. Then the project's files are re-read |
+| Moving data | In scope. Offered only when the project has containers holding the anonymous volumes. Order: save the file, `compose stop`, create each named volume with compose's own labels (`com.docker.compose.project`, `com.docker.compose.volume`) so compose adopts it without a warning, copy old into new with a throwaway helper container (`cp -a /from/. /to/`, old mounted read-only), then `up`. A target volume that already holds data stops it before copying. Progress and output in the Run dialog |
+| Helper image | `busybox` (small, has `sh` and `cp -a`), pulled with progress if missing. The helper runs as root so ownership and permissions are kept, and is removed after |
+| Old volumes | Never deleted by this. After the move they're mounted by nothing, so they show orange (orphaned) and the usual Prune removes them. The summary says so |
+| Failure | Any step failing stops the sequence and says what's done: the file is saved (with its `.bak`), copies made so far are kept, the old volumes are untouched, and the project may be stopped (Start / Up are one click away) |
+| Pop-outs | Show the views; the revise dialog and data move are main-window only, like other project actions |
+
+### Work
+
+- 15.1 ✅ Find and show: Rust `volume_audit.rs`:
+  cause per mount, project findings from config JSON + image inspect +
+  container mounts, name proposal and cleaning (unit-tested); `ContainerItem`
+  gains mount destinations; command `compose_unnamed_volumes`. UI: Mounts tab
+  marks, volumes list labels.
+- 15.2 Project view: `/compose/<project>/volumes` (paths, crumbs,
+  `placeTopic`), FileList + board, details-pane count.
+- 15.3 Revise: Rust text editor over the raw file (`compose_edit.rs`,
+  well unit-tested: block lists, missing keys, long form, top-level
+  `volumes:` present / absent, CRLF / LF kept, indent detection, every
+  refusal case); commands `compose_name_volumes` (preview: revised texts)
+  and `compose_save_revision` (backup, atomic write, changed-since-read
+  check). UI: Name volumes dialog (editable names, per-file diff tabs, Copy /
+  Save as / Save in place).
+- 15.4 Move data: commands to create labelled volumes and run the helper
+  copy (bollard: create, start, wait, exit code, remove); the stop / copy /
+  up sequence in the Run dialog; integration test (`--features
+  integration`): a postgres-style project with an image VOLUME, revise, move,
+  up, data present in the named volume.
+- ui-check: mock `compose config` JSON and image `Config.Volumes`; scenarios
+  for the project volumes view, the dialog (diff, snippet fallback, name
+  clash) and the Mounts tab; both themes.
+- Help: topics for the project volumes view and the Name volumes dialog
+  (`DialogHelp`); Mounts and Volumes topics mention the marks and labels.
+- Docs: README, CLAUDE.md (code layout, compose notes).
+- Delivery: four commits, 15.1 to 15.4.

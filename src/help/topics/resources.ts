@@ -8,7 +8,8 @@ const IMAGES = `- **Pull…** downloads an image from a registry, such as \`ngin
 - **Delete…** (Del) removes the selected images and their tags. Docker won't delete an image a running container uses; you can tick to also delete ones that stopped containers use.
 - **Prune…** deletes images no container uses. ${PRUNE_NOTE}`;
 
-const VOLUMES = `- **Delete…** (Del) needs the volume's name typed: the data in it is gone for good. Volumes a container uses can't be deleted.
+const VOLUMES = `- Anonymous volumes have hash names, so they're shown by the container and path that mount them (\`postgres:/var/lib/postgresql/data (anonymous)\`), or by the start of the hash when nothing does. Hover over one for its full name.
+- **Delete…** (Del) needs the volume's name typed: the data in it is gone for good. Volumes a container uses can't be deleted.
 - **Prune…** deletes volumes no container uses. Orphaned volumes are anonymous ones nothing mounts, or ones left by a compose project that's gone. ${PRUNE_NOTE}`;
 
 const NETWORKS = `- **Delete…** (Del) asks first. Docker's own networks (bridge, host, none) can't be deleted, and Docker refuses to delete a network containers are attached to.
@@ -71,6 +72,7 @@ ${VOLUMES}`,
     body: `One volume: its driver, where the engine keeps it (the mount point is inside the engine, in WSL for a WSL engine), its project and labels.
 
 - **Used by:** containers that mount it, running or stopped. Click one to open it.
+- **Mounted at:** for an anonymous volume, the container and path it's mounted at.
 
 **Delete** needs the volume's name typed, because its data can't be got back.`,
   },
