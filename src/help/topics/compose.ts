@@ -41,7 +41,7 @@ Pin a compose file, or drag one from File Explorer onto the window, to keep its 
 
 ${VERBS}
 
-**Logs** shows every service's logs merged, and **File** the compose files the project was started from. The details pane shows its folder, files and whether it's pinned.
+**Logs** shows every service's logs merged, **File** the compose files the project was started from, and **Unnamed** the volumes Docker makes for it with no name. The details pane shows its folder, files, whether it's pinned and how many unnamed volumes its containers hold.
 
 ${WHERE}`,
   },
@@ -65,6 +65,21 @@ Containers that aren't running join in when they start.`,
 - **Resolved:** \`docker compose config\`, the files merged with variables filled in. It's only run when you click **Show resolved file**, because it can include secrets from \`.env\`. It isn't kept: **Hide** it, or leave the tab, and it's gone.
 
 To change the project, edit its files and choose **Up** again.`,
+  },
+  "compose.volumes": {
+    title: "Unnamed volumes",
+    body: `Volumes Docker makes for the project with no name, because nothing names one at that path. They get hash names, so they're hard to find in the volumes list, and nothing says which project they belong to.
+
+| Column | What it says |
+|---|---|
+| Path in container | Where the service mounts it |
+| Why it's unnamed | **Image VOLUME**: the image declares the path and nothing is mounted over it. **Created without a name**: the compose file asks for a volume there with no name (\`- /path\`). Hover for more |
+| Volume now | The volume each container holds now; **None yet** until Up makes one |
+| Proposed name | What it would be called once named in the compose file |
+
+The list comes from compose's view of the files (only services, images and volume paths are read from it: the resolved config can hold secrets), the images' VOLUMEs and the containers. A service whose image isn't on the engine can't be checked: pull it (or build it) first.
+
+Enter (or a double-click) opens the volume a container holds now. Right-click to open its container or copy a name.`,
   },
   "compose.run": {
     title: "Compose output",

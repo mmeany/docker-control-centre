@@ -82,6 +82,7 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
             <p className="hint">
               Anonymous volumes have no name: Docker made them because nothing named a volume at that path. Their data outlives the container, but they're hard to
               tell apart in the volumes list. Hover over the Unnamed column to see why each was made.
+              {d.project && ` The ${d.project} project's Unnamed volumes view lists every one in the project.`}
             </p>
             {body}
           </>

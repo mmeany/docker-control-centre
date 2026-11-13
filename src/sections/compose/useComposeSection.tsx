@@ -12,7 +12,7 @@ import { CommandButton, CommandSeparator } from "../../components/CommandButton"
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
-import { ContainerIcon, DeleteIcon, FileIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon } from "../../components/Icons";
+import { ContainerIcon, DeleteIcon, FileIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon, VolumeIcon } from "../../components/Icons";
 import { TreeMore, TreeNote, TreeRow } from "../../components/TreeRow";
 import { partition } from "../../status/filter";
 import type { SectionUi, Shell } from "../../shell/shell";
@@ -27,12 +27,14 @@ import { attention, containerStatus, projectStatus } from "../../status/status";
 import { SectionBadge } from "../../components/SectionBadge";
 import { StatusMark } from "../../components/StatusMark";
 import { portsCell } from "../containers/ports";
+import { anonymousCount } from "../volumes/anonymous";
+import { unnamedKey, UnnamedNotes, unnamedRows, UNNAMED_COLUMNS, useUnnamedVolumes } from "./unnamedVolumes";
 
 const SECTION = "compose";
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
-/** A project's children: merged logs and its compose files. */
-const CHILDREN = { logs: "Logs", file: "Compose file" } as const;
+/** A project's children: merged logs, its compose files, its unnamed volumes. */
+const CHILDREN = { logs: "Logs", file: "Compose file", volumes: "Unnamed volumes" } as const;
 type Child = keyof typeof CHILDREN;
 
 export const composePaths = {
@@ -135,10 +137,12 @@ export function useComposeSection(shell: Shell): SectionUi {
   const single = selected.size === 1 && !projectName ? byName.get([...selected][0]) : undefined;
   const target = single ?? current;
   const shown = (p: string) => windowsPath(p, distro);
+  const unnamed = useUnnamedVolumes(engine, current && child === "volumes" ? targetOf(current) : null);
 
   function refresh() {
     shell.containers.refresh();
     loadPinned();
+    if (child === "volumes") unnamed.refresh();
   }
 
   // ---------------------------------------------------------------------------
@@ -283,6 +287,19 @@ export function useComposeSection(shell: Shell): SectionUi {
             ports: { text: "", sort: "" },
           },
         },
+        {
+          key: `${current.name}/volumes`,
+          icon: <VolumeIcon />,
+          isContainer: true,
+          cells: {
+            name: { text: "Unnamed volumes", sort: "  " },
+            state: { text: "", sort: "" },
+            service: { text: unnamedSummary(anonymousCount(current.containers)), sort: "" },
+            image: { text: "", sort: "" },
+            status: { text: "", sort: "" },
+            ports: { text: "", sort: "" },
+          },
+        },
         ...current.containers.map((c) => ({
           key: `c:${c.name}`,
           icon: <ContainerIcon />,
@@ -307,6 +324,30 @@ export function useComposeSection(shell: Shell): SectionUi {
     } else go(key);
   }
 
+  // Unnamed volumes: open the volume a container holds, or the container.
+  const findingOf = (key: string) => unnamed.data?.findings.find((f) => unnamedKey(f) === key);
+  function openUnnamed(key: string) {
+    const v = findingOf(key)?.current[0];
+    if (v) shell.navigate({ section: "volumes", path: v.volume });
+  }
+  function unnamedMenu(key: string | null, x: number, y: number) {
+    const f = key ? findingOf(key) : undefined;
+    const menu: MenuItem[] = [];
+    if (key && f) {
+      const c = f.current[0] && current?.containers.find((x) => x.name === f.current[0].container);
+      menu.push(
+        { label: "Open volume", bold: true, shortcut: "Enter", disabled: !f.current.length, onClick: () => openUnnamed(key) },
+        { label: "Open container", disabled: !c, onClick: () => c && shell.navigate({ section: "containers", path: containerPath(c.project, c.name) }) },
+        "separator",
+        { label: "Copy proposed name", onClick: () => void shell.copyText(f.name) },
+        ...(f.current.length ? [{ label: "Copy volume name", onClick: () => void shell.copyText(f.current[0].volume) }] : []),
+        "separator",
+      );
+    }
+    menu.push({ label: "Refresh", shortcut: "F5", onClick: refresh });
+    shell.openMenu(x, y, menu);
+  }
+
   function verbItems(p: Project): MenuItem[] {
     const ok = canRun(p);
     return [
@@ -324,7 +365,14 @@ export function useComposeSection(shell: Shell): SectionUi {
     if (key && key.startsWith("c:")) menu.push({ label: "Open container", bold: true, onClick: () => openRow(key) }, "separator");
     else if (key && p) {
       if (!projectName) menu.push({ label: "Open", bold: true, shortcut: "Enter", onClick: () => go(p.name) }, { label: "Open in new tab", onClick: () => shell.openInNewTab({ section: SECTION, path: p.name }) });
-      menu.push({ label: "Logs", onClick: () => go(`${p.name}/logs`) }, { label: "Compose file", onClick: () => go(`${p.name}/file`) }, "separator", ...verbItems(p), "separator");
+      menu.push(
+        { label: "Logs", onClick: () => go(`${p.name}/logs`) },
+        { label: "Compose file", onClick: () => go(`${p.name}/file`) },
+        { label: "Unnamed volumes", onClick: () => go(`${p.name}/volumes`) },
+        "separator",
+        ...verbItems(p),
+        "separator",
+      );
       menu.push(p.pinned ? { label: "Unpin", onClick: () => void unpin(p) } : { label: "Pin this project's compose file…", onClick: () => void pin() }, "separator");
     } else menu.push({ label: "Pin a compose file…", onClick: () => void pin() }, "separator");
     menu.push({ label: "Refresh", shortcut: "F5", onClick: refresh });
@@ -341,6 +389,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       <CommandSeparator />
       <CommandButton icon={<LogsIcon />} label="Logs" title="Every service's logs, merged" disabled={!target || target.containers.length === 0} onClick={() => target && go(`${target.name}/logs`)} />
       <CommandButton icon={<FileIcon />} label="File" title="The project's compose files, and the resolved config" disabled={!target} onClick={() => target && go(`${target.name}/file`)} />
+      <CommandButton icon={<VolumeIcon />} label="Unnamed" title="Volumes Docker makes for the project with no name" disabled={!target} onClick={() => target && go(`${target.name}/volumes`)} />
       <CommandButton icon={<NewItemIcon />} label="Pin file…" title="Pin a compose file so its project shows while it's down" onClick={() => void pin()} />
       <CommandSeparator />
       <CommandButton icon={<RefreshIcon />} label="Refresh" title="Refresh (F5)" onClick={refresh} />
@@ -459,6 +508,47 @@ export function useComposeSection(shell: Shell): SectionUi {
       const t = targetOf(current);
       content = <ComposeFileView key={`${current.name}:${t.files.join("|")}`} target={t} shown={shown} shell={shell} />;
       status = `${current.name} · ${t.files.length === 1 ? "1 compose file" : `${t.files.length} compose files`}`;
+    } else if (child === "volumes") {
+      if (unnamed.error) content = <ErrorPanel error={unnamed.error} onRetry={unnamed.refresh} />;
+      else if (!unnamed.data) content = <div className="empty-note">{engine.status === "connected" ? "Reading the project's volumes…" : "Not connected"}</div>;
+      else {
+        const rows = unnamedRows(unnamed.data.findings);
+        const empty = "No unnamed volumes: every volume in this project has a name.";
+        content = (
+          <div className="section-pane">
+            <UnnamedNotes data={unnamed.data} />
+            <FileList
+              key={path}
+              columnsKey="compose.volumes"
+              columns={UNNAMED_COLUMNS}
+              rows={rows}
+              selected={selected}
+              onSelectionChange={setSelected}
+              onOpen={openUnnamed}
+              onContextMenu={unnamedMenu}
+              emptyText={empty}
+              view={shell.view}
+            />
+          </div>
+        );
+        board = (
+          <div className="section-pane">
+            <UnnamedNotes data={unnamed.data} />
+            <Board
+              columns={UNNAMED_COLUMNS}
+              rows={rows}
+              selected={selected}
+              onSelectionChange={setSelected}
+              onOpen={openUnnamed}
+              onMenu={unnamedMenu}
+              actions={(k) => [{ label: "Open volume", icon: <VolumeIcon />, disabled: !findingOf(k)?.current.length, onClick: () => openUnnamed(k) }]}
+              emptyText={empty}
+            />
+          </div>
+        );
+        const n = unnamed.data.findings.length;
+        status = `${current.name} · ${n === 1 ? "1 unnamed volume" : `${n.toLocaleString()} unnamed volumes`}`;
+      }
     } else {
       content = (
         <FileList
@@ -498,6 +588,7 @@ export function useComposeSection(shell: Shell): SectionUi {
           ["Files", <span className="mono">{targetOf(paneProject).files.map(shown).join(", ")}</span>],
           ["Services", [...new Set(paneProject.containers.map((c) => c.service).filter(Boolean))].join(", ")],
           ["Pinned", paneProject.pinned ? "Yes" : ""],
+          ["Unnamed volumes", anonymousCount(paneProject.containers) ? unnamedSummary(anonymousCount(paneProject.containers)) : ""],
         ]}
       />
     </>
@@ -555,3 +646,6 @@ export function useComposeSection(shell: Shell): SectionUi {
     },
   };
 }
+
+/** "2 in use", from the containers (the view also finds ones not made yet). */
+const unnamedSummary = (n: number) => (n === 0 ? "None in use" : `${n.toLocaleString()} in use`);

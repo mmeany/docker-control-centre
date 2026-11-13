@@ -107,7 +107,8 @@ src/sections/images/, volumes/, networks/   one-level sections (list + item deta
 src/sections/volumes/anonymous.ts  anonymous volume labels (who mounts it) and causes (unit-tested)
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
                             RunDialog (streamed output), ComposeFileView (files + resolved),
-                            DropComposeDialog (dropped files: ticks, name, clash), the section
+                            DropComposeDialog (dropped files: ticks, name, clash),
+                            unnamedVolumes (the /volumes child: load, rows, notes), the section
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/status/                 status.ts: one state model for containers, projects, images,
                             volumes, networks (unit-tested); LegendDialog
@@ -403,4 +404,4 @@ Details in `PLAN.md`.)
     `/compose/<project>/volumes` view; a revised compose file naming them
     (diff, Copy / Save as / Save in place with `.bak`); optionally move
     their data into the named volumes and bring the project up.
-    15.1 ✅ find and show, 15.2 project view, 15.3 revise, 15.4 move data.
+    15.1 ✅ find and show, 15.2 ✅ project view, 15.3 revise, 15.4 move data.

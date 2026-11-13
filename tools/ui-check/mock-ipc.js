@@ -27,6 +27,8 @@
     { name: "legacy_db", driver: "local", mountpoint: "/var/lib/docker/volumes/legacy_db/_data", created: iso(4000), scope: "local", anonymous: false, project: "legacy", labels: [{ key: "com.docker.compose.project", value: "legacy" }], options: [] },
     { name: "old_cache", driver: "local", mountpoint: "/var/lib/docker/volumes/old_cache/_data", created: iso(2000), scope: "local", anonymous: false, project: null, labels: [], options: [] },
     { name: hex(5), driver: "local", mountpoint: "/var/lib/docker/volumes/x/_data", created: iso(500), scope: "local", anonymous: true, project: null, labels: [], options: [] },
+    // Nginx's cache, made by an image VOLUME in shop's web service.
+    { name: hex(7), driver: "local", mountpoint: `/var/lib/docker/volumes/${hex(7)}/_data`, created: iso(3), scope: "local", anonymous: true, project: "shop", labels: [{ key: "com.docker.volume.anonymous", value: "" }, { key: "com.docker.compose.project", value: "shop" }], options: [] },
     // Postgres's image VOLUME, mounted by the plain postgres container.
     { name: hex(6), driver: "local", mountpoint: `/var/lib/docker/volumes/${hex(6)}/_data`, created: iso(130), scope: "local", anonymous: true, project: null, labels: [{ key: "com.docker.volume.anonymous", value: "" }], options: [] },
   ];
@@ -63,7 +65,7 @@
     networks: opts.project ? [`${opts.project}_default`] : ["bridge"],
   });
   const containers = [
-    container("shop-web-1", "nginx:1.27", "running", "Up 3 hours", { project: "shop", service: "web", ports: ["8080→80/tcp"] }),
+    container("shop-web-1", "nginx:1.27", "running", "Up 3 hours", { project: "shop", service: "web", ports: ["8080→80/tcp"], volumes: [hex(7)], mountAt: { [hex(7)]: "/var/cache/nginx" } }),
     container("shop-api-1", "shop-api:latest", "running", "Up 3 hours", { project: "shop", service: "api", ports: ["3000→3000/tcp"], volumes: ["shop_pgdata"] }),
     container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker", configuredPorts: ["9100→9100/tcp"] }),
     container("monitoring-prometheus-1", "prom/prometheus:v3.1.0", "running", "Up 2 days", { project: "monitoring", service: "prometheus", ports: ["9090→9090/tcp"], age: 60, volumes: ["monitoring_prom"] }),
@@ -170,7 +172,7 @@
             destination: m.destination,
             mode: "z",
             readWrite: true,
-            anonymous: /^[0-9a-f]{64}$/.test(m.name) ? (c.image.startsWith("postgres") ? "image" : "noSource") : null,
+            anonymous: /^[0-9a-f]{64}$/.test(m.name) ? (/^(postgres|nginx)/.test(c.image) ? "image" : "noSource") : null,
           })),
         ],
         ports: port ? [{ containerPort: port, host: host ? [`0.0.0.0:${host}`, ...(c.ports.length ? [`[::]:${host}`] : [])] : [] }] : [],
@@ -430,16 +432,19 @@
       return { path: local, text, size: text.length };
     },
     compose_show_file: () => null,
-    // Shop's worker asks for /tmp/cache with no name; nothing for other projects.
+    // Shop: nginx's cache (an image VOLUME, held now) and the worker's
+    // /tmp/cache (no name, not made yet). Monitoring: grafana isn't pulled.
     compose_unnamed_volumes: (a) => {
       const project = a.target.name ?? "";
-      if (project !== "shop") return { project, findings: [], unchecked: [], configError: null };
-      return {
-        project,
-        findings: [{ service: "worker", target: "/tmp/cache", cause: "noSource", current: [], key: "worker-cache", name: "shop-worker-cache" }],
-        unchecked: [],
-        configError: null,
-      };
+      const findings =
+        project === "shop"
+          ? [
+              { service: "web", target: "/var/cache/nginx", cause: "image", current: [{ container: "shop-web-1", volume: hex(7) }], key: "web-nginx", name: "shop-web-nginx" },
+              { service: "worker", target: "/tmp/cache", cause: "noSource", current: [], key: "worker-cache", name: "shop-worker-cache" },
+            ]
+          : [];
+      const unchecked = project === "monitoring" ? [{ service: "grafana", image: "grafana/grafana:11.4.0", build: false }] : [];
+      return { project, findings, unchecked, configError: null };
     },
     save_text_file: () => null,
     compose_run: (a) => {

@@ -26,7 +26,10 @@ navigation, a live overview and cards instead.
 - **Compose:** running projects, plus compose files you pin so a project
   stays listed while it's down. Up, stop, restart, pull and down (deleting
   volumes needs the project name typed), with compose's output as it runs,
-  and every service's logs merged in time order. Each project's Compose
+  and every service's logs merged in time order. Each project's Unnamed
+  volumes lists the volumes Docker makes for it with no name (an image
+  `VOLUME` nothing is mounted over, or `- /path` with no name), with what
+  each would be called once named. Each project's Compose
   file shows the files it was started from (read-only, one tab each, with
   Show in folder and Open in editor) and, on request, the resolved config.
   Drag a compose file, or a folder holding one, from Explorer onto the
