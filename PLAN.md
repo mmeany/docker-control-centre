@@ -529,7 +529,7 @@ bring the project back up on the named volumes.
   container mounts, name proposal and cleaning (unit-tested); `ContainerItem`
   gains mount destinations; command `compose_unnamed_volumes`. UI: Mounts tab
   marks, volumes list labels.
-- 15.2 Project view: `/compose/<project>/volumes` (paths, crumbs,
+- 15.2 ✅ Project view: `/compose/<project>/volumes` (paths, crumbs,
   `placeTopic`), FileList + board, details-pane count.
 - 15.3 Revise: Rust text editor over the raw file (`compose_edit.rs`,
   well unit-tested: block lists, missing keys, long form, top-level

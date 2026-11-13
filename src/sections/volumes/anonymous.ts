@@ -17,6 +17,10 @@ export const CAUSE_NOTE: Record<AnonymousCause, string> = {
   unknown: "Docker made this volume with no name. The image couldn't be read to say why.",
 };
 
+/** How many anonymous volumes these containers hold. */
+export const anonymousCount = (containers: ContainerItem[]) =>
+  containers.reduce((n, c) => n + c.volumeMounts.filter((m) => /^[0-9a-f]{64}$/.test(m.name)).length, 0);
+
 /** The start of a hash name. */
 export const shortHash = (name: string) => (name.length > 20 ? `${name.slice(0, 12)}…` : name);
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ContainerItem } from "../../api/engine";
 import type { VolumeItem } from "../../api/resources";
-import { mountedAt, volumeLabel } from "./anonymous";
+import { anonymousCount, mountedAt, volumeLabel } from "./anonymous";
 
 const hash = "ab".repeat(32);
 const c = (name: string, mounts: [string, string][]) => ({ name, volumeMounts: mounts.map(([n, destination]) => ({ name: n, destination })) }) as unknown as ContainerItem;
@@ -14,6 +14,11 @@ describe("anonymous volume labels", () => {
     expect(mountedAt(containers, hash)).toEqual(["shop-db-1:/var/lib/postgresql/data", "shop-db-2:/var/lib/postgresql/data"]);
     expect(volumeLabel(vol(hash, true), containers)).toBe("shop-db-1:/var/lib/postgresql/data + 1 (anonymous)");
     expect(volumeLabel(vol(hash, true), containers.slice(0, 1))).toBe("shop-db-2:/var/lib/postgresql/data (anonymous)");
+  });
+
+  it("counts the anonymous volumes containers hold", () => {
+    expect(anonymousCount(containers)).toBe(2);
+    expect(anonymousCount([])).toBe(0);
   });
 
   it("falls back to the start of the hash, and leaves named volumes alone", () => {

@@ -548,6 +548,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .log-line mark { background: var(--log-hit); color: inherit; }
 .log-line.current mark { background: var(--log-current); }
 /* ---------- Compose file ---------- */
+.unnamed-notes { padding: 8px 10px 2px; border-bottom: 1px solid var(--border-light); }
+.unnamed-notes p { margin: 0 0 6px; }
 .compose-file-view .filter-bar > .segmented, .compose-file-view .filter-bar > .btn { flex-shrink: 0; white-space: nowrap; }
 .compose-file-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); user-select: text; }
 .compose-file-view .segmented button { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

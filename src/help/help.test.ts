@@ -23,6 +23,7 @@ const PLACES: Place[] = [
   at("compose", "shop"),
   at("compose", "shop/logs"),
   at("compose", "shop/file"),
+  at("compose", "shop/volumes"),
   at("images"),
   at("images", "0123456789ab"),
   at("volumes"),

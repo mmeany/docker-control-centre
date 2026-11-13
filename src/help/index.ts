@@ -65,6 +65,7 @@ export function placeTopic(p: Place, layout: Layout): HelpTopicId {
       if (!name) return listTopic("compose.list", layout);
       if (child === "logs") return "compose.logs";
       if (child === "file") return "compose.file";
+      if (child === "volumes") return "compose.volumes";
       return "compose.project";
     }
     case "images":
