@@ -466,7 +466,7 @@ reset), plus show / hide and a last column that fills the pane.
 | Pop-outs | Use and save the same values. Lists read a module store (`state/columns.ts`) the shell seeds from the settings it loads; a drag updates it and saves on release. A pop-out loads settings when it opens, so it starts from the main window's layout; a change made in a pop-out reaches the main window at its next start (`set_value` is per key, so the last write wins and nothing else is lost) |
 | Settings | A "Reset all column layouts" button, with a confirm, removes every `columns.*` value |
 | Keyboard | No new shortcuts |
-| Delivery | Three commits: 14.1 ✅ FileList resize, fit, fill, remember, and the header menu with Reset column widths; 14.2 ✅ show / hide (adds the ticks and Reset columns); 14.3 data-tables and the Settings reset |
+| Delivery | Three commits: 14.1 ✅ FileList resize, fit, fill, remember, and the header menu with Reset column widths; 14.2 ✅ show / hide (adds the ticks and Reset columns); 14.3 ✅ data-tables and the Settings reset (asks in place, applies at once) |
 
 ### Work
 
@@ -480,9 +480,10 @@ reset), plus show / hide and a last column that fills the pane.
   horizontal scroll (header and canvas share one scroll width), tiles from
   visible columns, sort falls back to Name when its column is hidden. Every
   FileList use passes a key.
-- Data-tables: one `ResizableTable` head (`colgroup` + handles) used by
-  `Table` in `containers/views.tsx`, `UsedBy`, image layers and
-  `DropComposeDialog`.
+- Data-tables: `ResizableTable` (`colgroup` + handles) used by `Table` in
+  `containers/views.tsx` (env, labels, mounts, ports, networks), `UsedBy`
+  and image history. `DropComposeDialog`'s file list has no headings, so it
+  stays as it is.
 - Settings dialog: the reset button.
 - Styles: handle, `col-resizing`, scroll, all as tokens in both themes.
 - Tests (Vitest): `columns.ts` (clamping, bad input, template, hidden and

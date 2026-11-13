@@ -111,6 +111,8 @@ Running containers with a shell are listed with \`stat\`, so you see owners and 
 - **Networks:** the networks it's on, with its address on each.
 - **Labels:** its labels, including compose's own (\`com.docker.compose.*\`).
 
+Drag a heading's right edge to resize a column, or double-click the edge to fit it; right-click the headings for **Reset column widths**. Widths are shared by every container's table of that kind.
+
 These are read-only. To change them, change the compose file or the command that created the container and recreate it.`,
   },
 };

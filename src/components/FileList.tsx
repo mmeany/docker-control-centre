@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { columnWidths, gridTemplate, useColumnLayout, visibleColumns } from "../state/columns";
 import type { Status } from "../status/status";
+import { contentWidth, dragColumn } from "./columnDrag";
 import { ContextMenu } from "./ContextMenu";
 import { StatusMark, statusTip } from "./StatusMark";
 
@@ -61,19 +62,6 @@ type Sort = { col: string; dir: 1 | -1 };
 const ROW_H = 22;
 /** Extra rows rendered above/below the viewport. */
 const OVERSCAN = 12;
-
-/**
- * Width an element needs to show its contents untruncated, padding included.
- * Measured with a Range: text keeps its full width when ellipsis hides it,
- * and it works whether the element is wider or narrower than its contents.
- */
-function contentWidth(el: HTMLElement | undefined): number {
-  if (!el) return 0;
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const cs = getComputedStyle(el);
-  return Math.ceil(range.getBoundingClientRect().width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) + 1;
-}
 
 /** Details-view list with sortable columns and Explorer-style selection. */
 export function FileList({ columns: allColumns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details", columnsKey }: Props) {
@@ -258,30 +246,14 @@ export function FileList({ columns: allColumns, rows, selected, onSelectionChang
 
   /** Pointer-down on a header edge: the column follows the pointer, saved on release. */
   function startResize(e: PointerEvent<HTMLSpanElement>, id: string) {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const el = e.currentTarget;
     // The rendered width, so a filling last column grows from where its edge is.
-    const startW = el.parentElement!.getBoundingClientRect().width;
-    const x0 = e.clientX;
-    let w = startW;
-    el.setPointerCapture(e.pointerId);
-    document.body.classList.add("col-resizing");
-    const move = (ev: globalThis.PointerEvent) => {
-      w = startW + ev.clientX - x0;
-      cols.setWidth(id, w, false);
-    };
-    const end = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", end);
-      el.removeEventListener("pointercancel", end);
-      document.body.classList.remove("col-resizing");
-      if (w !== startW) cols.setWidth(id, w);
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointercancel", end);
+    const startW = e.currentTarget.parentElement!.getBoundingClientRect().width;
+    dragColumn(
+      e,
+      startW,
+      (w) => cols.setWidth(id, w, false),
+      (w) => cols.setWidth(id, w),
+    );
   }
 
   /** Double-click on a header edge: as wide as the header or the widest rendered cell. */

@@ -61,6 +61,8 @@ Lists update live from the engine's events. Drag the edge of a column
 heading to resize it, double-click the edge to fit the widest row, and
 right-click the headings to show or hide columns or reset them; the last
 column fills the pane, and a list wider than the pane scrolls sideways.
+Inspect tables (environment, mounts, ports, …) resize the same way, and
+**Settings** can reset every list and table at once.
 Tabs, the view for each place, the columns for each kind of list, the
 details pane and the window's size and position come back next time.
 

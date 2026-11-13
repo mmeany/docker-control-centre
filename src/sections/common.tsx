@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { ActionResult, ContainerItem } from "../api/engine";
 import { ContainerIcon } from "../components/Icons";
 import { StatusMark, statusTip } from "../components/StatusMark";
+import { ResizableTable } from "../components/ResizableTable";
 import { containerStatus } from "../status/status";
 import type { Shell } from "../shell/shell";
 import { containerPath } from "./containers/paths";
@@ -46,14 +47,14 @@ export function UsedBy({ containers, shell, what }: { containers: ContainerItem[
   if (containers.length === 0) return <p className="hint">No container uses this {what}.</p>;
   return (
     <div className="data-table-wrap">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Container</th>
-            <th>State</th>
-            <th>Image</th>
-          </tr>
-        </thead>
+      <ResizableTable
+        tableKey="usedBy"
+        columns={[
+          { id: "container", label: "Container" },
+          { id: "state", label: "State" },
+          { id: "image", label: "Image" },
+        ]}
+      >
         <tbody>
           {containers.map((c) => {
             const st = containerStatus(c);
@@ -77,7 +78,7 @@ export function UsedBy({ containers, shell, what }: { containers: ContainerItem[
             );
           })}
         </tbody>
-      </table>
+      </ResizableTable>
     </div>
   );
 }

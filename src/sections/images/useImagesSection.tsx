@@ -12,6 +12,7 @@ import { formatDate, formatSize } from "../../format";
 import type { SectionUi, Shell } from "../../shell/shell";
 import { useEngineList } from "../../state/engineList";
 import { LAST, NameList, PropsTable, runRemoval, UsedBy } from "../common";
+import { ResizableTable } from "../../components/ResizableTable";
 import { ResourceTree } from "../ResourceTree";
 import { flatPaths, IMAGE_KEY, imageName, imageRefs, imageUsers, orphanedImages, shortId, totalSize, unusedImages } from "../rules";
 import { StatusMark } from "../../components/StatusMark";
@@ -389,14 +390,14 @@ function ImageView({ image, details: d, shell }: { image: ImageItem; details: Im
           <>
             <h3>History</h3>
             <div className="data-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Created</th>
-                    <th>Step</th>
-                    <th className="right">Size</th>
-                  </tr>
-                </thead>
+              <ResizableTable
+                tableKey="imageHistory"
+                columns={[
+                  { id: "created", label: "Created" },
+                  { id: "step", label: "Step" },
+                  { id: "size", label: "Size", className: "right" },
+                ]}
+              >
                 <tbody>
                   {d.history.map((h, i) => (
                     <tr key={i}>
@@ -406,7 +407,7 @@ function ImageView({ image, details: d, shell }: { image: ImageItem; details: Im
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ResizableTable>
             </div>
           </>
         )}
