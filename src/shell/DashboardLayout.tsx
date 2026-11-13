@@ -7,6 +7,8 @@
 // else its Explorer content.
 import { useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
+import { CommandSeparator } from "../components/CommandButton";
+import { HelpButton } from "../components/HelpDialog";
 import { BackIcon, CopyIcon, ExplorerIcon, ForwardIcon, GearIcon, HomeIcon, RefreshIcon, SidebarIcon, UpIcon } from "../components/Icons";
 import { attentionText, SectionBadge } from "../components/SectionBadge";
 import { StatusBar } from "../components/StatusBar";
@@ -81,7 +83,7 @@ export function DashboardLayout({ app }: { app: AppShell }) {
           <div className="dash-nav-foot">
             <NavItem
               label="Help"
-              title="Help: what the colours mean, about this app"
+              title="Help: this view, general help, what the colours mean, about this app"
               icon={<span className="dash-help-mark">?</span>}
               collapsed={collapsed}
               onClick={(e) => {
@@ -149,6 +151,7 @@ export function DashboardLayout({ app }: { app: AppShell }) {
             <button className="tool-btn" title="Refresh (F5)" onClick={app.refresh}>
               <RefreshIcon />
             </button>
+            {!active?.commands && <HelpButton onClick={app.showHelp} />}
             <button
               className={`cmd-btn ${app.detailsPane ? "pressed" : ""}`}
               aria-pressed={app.detailsPane}
@@ -161,7 +164,13 @@ export function DashboardLayout({ app }: { app: AppShell }) {
               <ExplorerIcon /> <span className="cmd-label">Explorer</span>
             </button>
           </header>
-          {active?.commands && <div className="toolbar-row command-bar dash-commands">{active.commands}</div>}
+          {active?.commands && (
+            <div className="toolbar-row command-bar dash-commands">
+              {active.commands}
+              <CommandSeparator />
+              <HelpButton onClick={app.showHelp} />
+            </div>
+          )}
           <div className="dash-content">
             <div className="pane-main">{content}</div>
             {app.detailsPane && (

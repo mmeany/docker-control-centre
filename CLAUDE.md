@@ -141,6 +141,8 @@ src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
                             engine.ts (useEngine: status, info, change counters),
                             session.ts (tabs, views per place, details pane: restored)
+src/help/                   index.ts (HELP_TOPICS, placeTopic per layout), store.ts (registered /
+                            open topic), topics/<area>.ts (Markdown; unit-tested in help.test.ts)
 src/components/             shared UI (below)
 src/styles.css              every style; tokens at the top
 src-tauri/src/lib.rs        state, plugins, generate_handler! list
@@ -202,6 +204,11 @@ docs/                       WSL-SETUP.md, screenshots (from ui:check)
   GitHub link (bugs and feature requests go there; `open_project_page`
   opens the fixed `PROJECT_URL` in Rust) and, last, the line "Lovingly
   created by Claude Code under the direction of Mark Meany." Keep both.
+- `HelpDialog` (F1): `HelpButton` (end of the command bar; dashboard Overview: header; a pop-out's status
+  bar), `DialogHelp topic` (a dialog's title bar; registers the topic),
+  `HelpTopic id` (registers a topic for a tab inside a view). `Markdown`: the
+  small subset help uses (headings, lists, tables, code, bold / italic), React
+  elements only.
 - `ErrorPanel` (in place of content, with Retry), `StatusBar`, `Toolbar`, `Icons`
   (inline SVG).
 - CSS building blocks: `.section-pane`, `.filter-bar`, `.detail-view` +
@@ -225,7 +232,9 @@ docs/                       WSL-SETUP.md, screenshots (from ui:check)
    `commands/mod.rs`, `mod <id>;` in `lib.rs`, commands in `generate_handler!`.
 4. `src/api/<id>.ts` with typed wrappers.
 5. Mock the new commands in `tools/ui-check/mock-ipc.js` and add a scenario.
-6. Docs: README section list; this file.
+6. Help: topics in `src/help/topics/<id>.ts` (list levels need `.explorer` and
+   `.dashboard`, via `listTopic`), mapped in `placeTopic`.
+7. Docs: README section list; this file.
 
 `sections/containers` shows the patterns: a tree with expandable children, a
 FileList per level, reloading on engine changes, a context menu with "Open in
@@ -263,7 +272,13 @@ new tab", and paths with their own parser (`isPath`).
   window's streams, terminals and feed when it closes. A pop-out window
   (`?popout=<address>`) shows one place, has no `shell.popOut`, and never
   reads or writes the session.
-- App shortcuts don't fire while focus is in a terminal (`.xterm`).
+- App shortcuts don't fire while focus is in a terminal (`.xterm`), except F1.
+- Help: a new or changed view, tab or larger dialog updates its topic (a new
+  one gets a topic; a dialog `<DialogHelp>`). Topic choice: the newest
+  registered topic (an open dialog), else `placeTopic(place, layout)`, or
+  `connecting` while the engine isn't connected; pop-outs use Explorer's.
+  Simple confirm / prompt / typed-confirm dialogs have none. Topics are
+  written for the app, not copied from the README.
 - Status colours come only from `src/status/status.ts` (tokens `--st-*` in
   styles.css, light and dark). Give tree rows and list rows a `status`; never
   colour by raw state. Prune candidates are built on the same model, so
@@ -350,3 +365,6 @@ Details in `PLAN.md`.)
     from Explorer onto the window (not container Files); confirm the files
     (base + override ticked, variants offered) and see the project name and
     any clash; it's pinned (pins hold file lists) and brought up, then opens.
+13. ✅ In-app help (see PLAN.md, M13): F1 or a ? button opens a short
+    Markdown topic for the current view or dialog (per layout at list
+    levels), with General help; a Connecting topic while disconnected.

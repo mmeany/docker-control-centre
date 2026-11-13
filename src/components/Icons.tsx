@@ -23,6 +23,16 @@ export function FileIcon({ size = 16 }: P) {
   );
 }
 
+export function HelpIcon({ size = 16 }: P) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>
+      <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5.5 6 a2.5 2.5 0 1 1 3.8 2.1 C8.4 8.7 8 9.1 8 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="8" cy="12.4" r="1.1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function ServerIcon({ size = 16 }: P) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden>

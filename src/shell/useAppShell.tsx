@@ -14,8 +14,11 @@ import { AboutDialog } from "../components/AboutDialog";
 import { ConfirmDialog, type ConfirmButton } from "../components/ConfirmDialog";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 import type { ViewMode } from "../components/FileList";
+import { HelpDialog } from "../components/HelpDialog";
 import { PromptDialog } from "../components/PromptDialog";
 import { TypedConfirmDialog } from "../components/TypedConfirmDialog";
+import { generalTopic, placeTopic } from "../help";
+import { openHelp as openHelpTopic, registeredHelpTopic, useOpenHelp } from "../help/store";
 import { SECTIONS } from "../sections";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { useEngine, type EngineState } from "../state/engine";
@@ -100,8 +103,10 @@ export interface AppShell {
   submitAddress: (text: string) => boolean;
   copyText: (text: string) => Promise<void>;
   openSettings: () => void;
-  /** Help menu at a point (legend, about). */
+  /** Help menu at a point (this view, general, legend, about). */
   openHelp: (x: number, y: number) => void;
+  /** Help for the current view or open dialog (F1). */
+  showHelp: () => void;
   /** Status bar: left text (section status, or working / flash), and the connection. */
   statusLeft: string;
   connection: ReactNode;
@@ -426,6 +431,28 @@ export function useAppShell(): AppShell {
   }, [goUp, nav, refresh, place, changeView, toggleDetailsPane, active, explorer]);
 
   // ---------------------------------------------------------------------------
+  // Help (F1): the newest registered topic (an open dialog), else the place's,
+  // or Connecting while the engine isn't. Pop-outs use the Explorer topics.
+
+  const helpLayout: Layout = POPOUT_PLACE ? "explorer" : layout;
+  const helpTopic = useOpenHelp();
+  const showHelp = useCallback(() => {
+    openHelpTopic(registeredHelpTopic() ?? (engine.status === "connected" ? placeTopic(place, helpLayout) : "connecting"));
+  }, [engine.status, place, helpLayout]);
+  // F1 works everywhere, in dialogs and terminals too: the capture phase sees
+  // it before xterm does, and stopping it here keeps it from the shell.
+  useEffect(() => {
+    function onF1(e: KeyboardEvent) {
+      if (e.key !== "F1") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!document.querySelector(".help-dialog")) showHelp();
+    }
+    window.addEventListener("keydown", onF1, true);
+    return () => window.removeEventListener("keydown", onF1, true);
+  }, [showHelp]);
+
+  // ---------------------------------------------------------------------------
   // Status bar, help, dialogs
 
   let statusLeft = active ? active.status : `${SECTIONS.length} section${SECTIONS.length === 1 ? "" : "s"}`;
@@ -450,6 +477,9 @@ export function useAppShell(): AppShell {
       x,
       y,
       items: [
+        { label: "Help for this view", shortcut: "F1", onClick: showHelp },
+        { label: "General help", onClick: () => openHelpTopic(generalTopic(helpLayout)) },
+        "separator",
         { label: "What the colours mean…", onClick: () => setLegendOpen(true) },
         "separator",
         { label: "About Docker Control Centre", onClick: () => setAboutOpen(true) },
@@ -521,6 +551,7 @@ export function useAppShell(): AppShell {
           {confirm.body}
         </ConfirmDialog>
       )}
+      {helpTopic && <HelpDialog topic={helpTopic} general={generalTopic(helpLayout)} />}
     </>
   );
 
@@ -554,6 +585,7 @@ export function useAppShell(): AppShell {
     copyText,
     openSettings: () => setSettingsOpen(true),
     openHelp,
+    showHelp,
     statusLeft,
     connection,
     connectionTitle,

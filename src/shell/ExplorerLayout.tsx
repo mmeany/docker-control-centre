@@ -4,6 +4,7 @@
 // main panel and the status bar.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FileList, type Column, type Row } from "../components/FileList";
+import { HelpButton } from "../components/HelpDialog";
 import { ServerIcon } from "../components/Icons";
 import { attentionText } from "../components/SectionBadge";
 import { StatusBar } from "../components/StatusBar";
@@ -94,7 +95,9 @@ export function ExplorerLayout({ app }: { app: AppShell }) {
     />
   );
 
-  const statusBar = <StatusBar left={app.statusLeft} right={app.connection} rightTitle={app.connectionTitle} />;
+  const statusBar = (
+    <StatusBar left={app.statusLeft} right={app.connection} rightTitle={app.connectionTitle} end={app.popout ? <HelpButton onClick={app.showHelp} /> : undefined} />
+  );
 
   if (app.popout) {
     return (
@@ -143,6 +146,7 @@ export function ExplorerLayout({ app }: { app: AppShell }) {
         onOpenSettings={app.openSettings}
         onSwitchLayout={() => app.changeLayout("dashboard")}
         onOpenHelp={app.openHelp}
+        onShowHelp={app.showHelp}
         place={place}
         canBack={nav.canBack}
         canForward={nav.canForward}

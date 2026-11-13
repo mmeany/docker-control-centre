@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AppError } from "../../api/core";
 import { composeApi, type ComposeTarget, type ComposeVerb } from "../../api/compose";
 import { streamsApi } from "../../api/streams";
+import { DialogHelp } from "../../components/HelpDialog";
 
 interface Props {
   title: string;
@@ -53,6 +54,7 @@ export function RunDialog({ title, target, verb, onClose }: Props) {
       <div className="dialog dialog-wide" role="dialog" aria-modal aria-labelledby="run-title" onKeyDown={(e) => e.key === "Escape" && !running && close()}>
         <div className="dialog-title" id="run-title">
           {title}
+          <DialogHelp topic="compose.run" />
         </div>
         <div className="dialog-body">
           <div className="run-output" ref={body}>

@@ -6,6 +6,7 @@ import { appApi } from "../api/app";
 import type { AppError, Settings } from "../api/core";
 import { composeApi, COMPOSE_DISTRO_KEY, COMPOSE_MODE_KEY, type ComposeOutput, type Distro } from "../api/compose";
 import { LAYOUT_KEY, LAYOUTS, readLayout, type Layout } from "../shell/layout";
+import { DialogHelp } from "../components/HelpDialog";
 
 interface Props {
   settings: Settings;
@@ -61,6 +62,7 @@ export function SettingsDialog({ settings, onSaved, onClose }: Props) {
       <div className="dialog dialog-wide" role="dialog" aria-modal aria-labelledby="settings-title" onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
         <div className="dialog-title" id="settings-title">
           Settings
+          <DialogHelp topic="settings" />
         </div>
         <div className="dialog-body">
           <fieldset className="radio-group">

@@ -4,6 +4,7 @@ import type { AppError } from "../../api/core";
 import { resourcesApi, type LayerProgress } from "../../api/resources";
 import { streamsApi } from "../../api/streams";
 import { formatSize } from "../../format";
+import { DialogHelp } from "../../components/HelpDialog";
 
 interface Props {
   reference: string;
@@ -63,6 +64,7 @@ export function PullDialog({ reference, onDone }: Props) {
       <div className="dialog dialog-wide" role="dialog" aria-modal aria-labelledby="pull-title" onKeyDown={(e) => e.key === "Escape" && cancel()}>
         <div className="dialog-title" id="pull-title">
           Pulling {reference}
+          <DialogHelp topic="images.pull" />
         </div>
         <div className="dialog-body">
           <div className="pull-summary">
