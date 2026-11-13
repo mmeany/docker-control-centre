@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { columnWidths, gridTemplate, useColumnLayout } from "../state/columns";
 import type { Status } from "../status/status";
+import { ContextMenu } from "./ContextMenu";
 import { StatusMark, statusTip } from "./StatusMark";
 
 /** Explorer's views: details (columns), list (names flowing in columns), tiles. */
@@ -37,6 +39,12 @@ interface Props {
   emptyText: string;
   /** Default details. List and tiles aren't virtualised: fine for hundreds of rows. */
   view?: ViewMode;
+  /**
+   * Which kind of list this is, for remembering column widths (settings value
+   * `columns.<key>`). Lists of one kind share it; without one, widths can
+   * still be dragged but are forgotten.
+   */
+  columnsKey?: string;
 }
 
 type Sort = { col: string; dir: 1 | -1 };
@@ -46,22 +54,47 @@ const ROW_H = 22;
 /** Extra rows rendered above/below the viewport. */
 const OVERSCAN = 12;
 
+/**
+ * Width an element needs to show its contents untruncated, padding included.
+ * Measured with a Range: text keeps its full width when ellipsis hides it,
+ * and it works whether the element is wider or narrower than its contents.
+ */
+function contentWidth(el: HTMLElement | undefined): number {
+  if (!el) return 0;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const cs = getComputedStyle(el);
+  return Math.ceil(range.getBoundingClientRect().width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)) + 1;
+}
+
 /** Details-view list with sortable columns and Explorer-style selection. */
-export function FileList({ columns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details" }: Props) {
+export function FileList({ columns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details", columnsKey }: Props) {
   const [sort, setSort] = useState<Sort>({ col: columns[0].id, dir: 1 });
   const anchor = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const cols = useColumnLayout(
+    columnsKey,
+    columns.map((c) => c.id),
+  );
+  const [headMenu, setHeadMenu] = useState<{ x: number; y: number } | null>(null);
   // Virtualisation: only rows near the viewport are in the DOM.
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(600);
 
+  // The body's vertical scrollbar width, kept off the header so columns line up.
+  const [gutter, setGutter] = useState(0);
+
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setViewH(el.clientHeight));
+    const ro = new ResizeObserver(() => {
+      setViewH(el.clientHeight);
+      setGutter(el.offsetWidth - el.clientWidth);
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [view]);
 
   const sorted = useMemo(() => {
     const out = [...rows];
@@ -202,35 +235,108 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
     );
   }
 
-  const template = columns.map((c) => `${c.width}px`).join(" ") + " 1fr";
+  const widths = columnWidths(columns, cols.layout);
+  const template = gridTemplate(widths);
+  // Rows sit inside a 2px margin; the header lines up with the canvas.
+  const minWidth = widths.reduce((a, b) => a + b, 0) + 4;
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
   const last = Math.min(sorted.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
   const visible = sorted.slice(first, last);
 
+  /** Pointer-down on a header edge: the column follows the pointer, saved on release. */
+  function startResize(e: PointerEvent<HTMLSpanElement>, id: string) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget;
+    // The rendered width, so a filling last column grows from where its edge is.
+    const startW = el.parentElement!.getBoundingClientRect().width;
+    const x0 = e.clientX;
+    let w = startW;
+    el.setPointerCapture(e.pointerId);
+    document.body.classList.add("col-resizing");
+    const move = (ev: globalThis.PointerEvent) => {
+      w = startW + ev.clientX - x0;
+      cols.setWidth(id, w, false);
+    };
+    const end = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", end);
+      el.removeEventListener("pointercancel", end);
+      document.body.classList.remove("col-resizing");
+      if (w !== startW) cols.setWidth(id, w);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+  }
+
+  /** Double-click on a header edge: as wide as the header or the widest rendered cell. */
+  function fit(index: number) {
+    let w = contentWidth(headRef.current?.querySelectorAll<HTMLElement>(".fl-head-cell")[index]);
+    bodyRef.current?.querySelectorAll<HTMLElement>(`.fl-row > :nth-child(${index + 1})`).forEach((cell) => {
+      w = Math.max(w, contentWidth(cell));
+    });
+    if (w > 0) cols.setWidth(columns[index].id, w);
+  }
+
   return (
     <div className="file-list" tabIndex={0} onKeyDown={onKeyDown}>
-      <div className="fl-header" style={{ gridTemplateColumns: template }}>
-        {columns.map((c) => (
-          <button
-            key={c.id}
-            className={`fl-head-cell ${c.align === "right" ? "right" : ""}`}
-            onClick={() => headerClick(c.id)}
-          >
-            {c.label}
-            {sort.col === c.id && <span className="sort-arrow">{sort.dir === 1 ? "▲" : "▼"}</span>}
-          </button>
-        ))}
-        <span className="fl-head-cell filler" />
+      <div
+        className="fl-header"
+        ref={headRef}
+        style={{ paddingRight: gutter }}
+        // Focusing a header cell can scroll the header itself: the rows follow.
+        onScroll={(e) => {
+          const body = bodyRef.current;
+          if (body && body.scrollLeft !== e.currentTarget.scrollLeft) body.scrollLeft = e.currentTarget.scrollLeft;
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setHeadMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
+        <div className="fl-head-row" style={{ gridTemplateColumns: template, minWidth }}>
+          {columns.map((c, i) => (
+            <div key={c.id} className="fl-head-wrap" data-col={c.id}>
+              <button className={`fl-head-cell ${c.align === "right" ? "right" : ""}`} onClick={() => headerClick(c.id)}>
+                {c.label}
+                {sort.col === c.id && <span className="sort-arrow">{sort.dir === 1 ? "▲" : "▼"}</span>}
+              </button>
+              <span
+                className="fl-resize"
+                title="Drag to resize, double-click to fit"
+                onPointerDown={(e) => startResize(e, c.id)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  fit(i);
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+      {headMenu && (
+        <ContextMenu
+          x={headMenu.x}
+          y={headMenu.y}
+          items={[{ label: "Reset column widths", onClick: cols.reset, disabled: !cols.hasCustom }]}
+          onClose={() => setHeadMenu(null)}
+        />
+      )}
       <div
         className="fl-body"
         ref={bodyRef}
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+        onScroll={(e) => {
+          setScrollTop(e.currentTarget.scrollTop);
+          const head = headRef.current;
+          if (head && head.scrollLeft !== e.currentTarget.scrollLeft) head.scrollLeft = e.currentTarget.scrollLeft;
+        }}
         onContextMenu={onBodyContextMenu}
         onClick={onBodyClick}
       >
         {sorted.length === 0 && <div className="empty-note">{emptyText}</div>}
-        <div className="fl-canvas" style={{ height: sorted.length * ROW_H, position: "relative" }}>
+        <div className="fl-canvas" style={{ height: sorted.length * ROW_H, minWidth, position: "relative" }}>
         {visible.map((r, i) => (
           <div
             key={r.key}

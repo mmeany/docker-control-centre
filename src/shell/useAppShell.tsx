@@ -3,6 +3,7 @@
 // history, the Shell offered to sections, every section's hook, keyboard
 // shortcuts, status-bar text and the shared dialogs. A layout component
 // (ExplorerLayout) takes what this returns and places it on screen.
+import { seedColumnLayouts } from "../state/columns";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appApi } from "../api/app";
 import { composeApi, type Pinned } from "../api/compose";
@@ -158,6 +159,7 @@ export function useAppShell(): AppShell {
     appApi
       .getSettings()
       .then((s) => {
+        seedColumnLayouts(s.values);
         setSettings(s);
         const session = readSession(s.values[SESSION_KEY]);
         // A pop-out shows its own place and doesn't touch the main window's session.

@@ -250,6 +250,7 @@ export function useImagesSection(shell: Shell): SectionUi {
     else if (!path) {
       content = (
         <FileList
+          columnsKey="images"
           columns={COLUMNS}
           rows={rows}
           selected={selected}

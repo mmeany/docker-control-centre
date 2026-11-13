@@ -197,6 +197,7 @@ export function FilesView({ container, dir, shell, openDir }: Props) {
       ) : (
         <FileList
           key={dir}
+          columnsKey="files"
           columns={COLUMNS}
           rows={rows}
           selected={selected}

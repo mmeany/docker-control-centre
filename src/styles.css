@@ -19,6 +19,7 @@
   --hover: #e5f3ff;
   --sel: #cce8ff;
   --sel-border: #99d1ff;
+  --col-resize: #99d1ff;
   --sel-inactive: #d9d9d9;
   --focus: #0078d7;
   --danger: #b3261e;
@@ -95,6 +96,7 @@
   --hover: #2a3542;
   --sel: #18405f;
   --sel-border: #2f6d9e;
+  --col-resize: #2f6d9e;
   --sel-inactive: #3a3a3a;
   --focus: #4aa3f0;
   --danger: #ff7b72;
@@ -258,13 +260,19 @@ button { font: inherit; color: inherit; }
 
 /* ---------- File list (details view) ---------- */
 .file-list { flex: 1; display: flex; flex-direction: column; min-height: 0; outline: none; }
-.fl-header { display: grid; border-bottom: 1px solid var(--border-light); background: var(--pane); flex-shrink: 0; }
+.fl-header { border-bottom: 1px solid var(--border-light); background: var(--pane); flex-shrink: 0; overflow: hidden; }
+.fl-head-row { display: grid; }
+.fl-head-wrap { position: relative; display: flex; min-width: 0; border-right: 1px solid var(--border-light); }
 .fl-head-cell {
-  text-align: left; padding: 4px 8px; border: none; border-right: 1px solid var(--border-light);
-  background: var(--pane); color: var(--header-text); white-space: nowrap; overflow: hidden;
+  flex: 1; min-width: 0; text-align: left; padding: 4px 8px; border: none;
+  background: var(--pane); color: var(--header-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.fl-head-cell:hover:not(.filler) { background: var(--hover); }
-.fl-head-cell.filler { border-right: none; }
+.fl-head-cell:hover { background: var(--hover); }
+/* Drag handle on a header cell's right edge (FileList: resize, double-click fits). */
+.fl-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 7px; cursor: col-resize; z-index: 1; touch-action: none; }
+.fl-head-wrap:last-child .fl-resize { right: 0; } /* inside the header, which clips */
+.fl-resize:hover { background: var(--col-resize); }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none; }
 .fl-head-cell.right, .fl-cell.right { text-align: right; justify-content: flex-end; }
 .sort-arrow { font-size: 8px; margin-left: 6px; color: var(--sort-arrow); }
 .fl-body { flex: 1; overflow: auto; }

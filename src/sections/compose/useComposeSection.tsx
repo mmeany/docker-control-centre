@@ -412,6 +412,7 @@ export function useComposeSection(shell: Shell): SectionUi {
     else if (!projectName) {
       content = (
         <FileList
+          columnsKey="compose"
           columns={COLUMNS}
           rows={projectRows}
           selected={selected}
@@ -461,6 +462,7 @@ export function useComposeSection(shell: Shell): SectionUi {
       content = (
         <FileList
           key={path}
+          columnsKey="compose.project"
           columns={SERVICE_COLUMNS}
           rows={serviceRows}
           selected={selected}

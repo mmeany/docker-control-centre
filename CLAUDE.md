@@ -140,6 +140,7 @@ src/api/<section>.ts        typed wrappers for a section's commands
 src/api/window.ts           OS theme + native file drag-and-drop (onFileDrop)
 src/state/                  theme.ts (useTheme), tabs.ts (tabs + per-tab history),
                             engine.ts (useEngine: status, info, change counters),
+                            columns.ts (list column widths: store, template; unit-tested),
                             session.ts (tabs, views per place, details pane: restored)
 src/help/                   index.ts (HELP_TOPICS, placeTopic per layout), store.ts (registered /
                             open topic), topics/<area>.ts (Markdown; unit-tested in help.test.ts)
@@ -181,6 +182,12 @@ docs/                       WSL-SETUP.md, screenshots (from ui:check)
 - `FileList`: details (virtualised), list and tiles views (`view`, from
   `shell.view`; the shell keeps it per place). Sort, multi-select, keyboard,
   context menu, `dimmed` rows. Fixed ROW_H = 22px, must match `.fl-row` CSS.
+  Columns resize (drag a header edge, double-click to fit the rendered
+  rows, header right-click resets), the last one fills the pane, and the
+  list scrolls sideways with the header in step. Pass a `columnsKey` (the
+  kind of list: `containers`, `compose.project`, `files`, ...): widths are
+  kept in settings values `columns.<key>` by `state/columns.ts`, a module
+  store the shell seeds when settings load (so FileList needs no Shell).
 - `Board`: the dashboard's list. Takes the same `columns` / `rows` as
   FileList and the section's selection and context menu; adds tick boxes,
   inline `actions(key)`, a More button (the context menu), a `bulk` bar for
@@ -368,3 +375,8 @@ Details in `PLAN.md`.)
 13. ✅ In-app help (see PLAN.md, M13): F1 or a ? button opens a short
     Markdown topic for the current view or dialog (per layout at list
     levels), with General help; a Connecting topic while disconnected.
+14. Adjustable columns (see PLAN.md, M14; 14.1 ✅): drag a header edge to resize,
+    double-click to fit, the last column fills the pane; header menu to
+    show / hide columns and reset; inspect tables resizable too; remembered
+    per list kind in settings values (`columns.*`). 14.1 resize, 14.2 show /
+    hide, 14.3 data-tables and Settings reset.

@@ -444,3 +444,52 @@ button opens a short topic for the current place or open dialog.
   and over a dialog; both themes.
 - Docs: README (F1 in the shortcuts table), CLAUDE.md (code layout, the rule,
   the F1 exception, "Adding a section").
+
+## M14: Adjustable columns (agreed 2026-11-13)
+
+Columns you can resize, fit, hide and reset, modelled on AWS Explorer's
+13.1 (drag a header edge, double-click to fit, right-click the header to
+reset), plus show / hide and a last column that fills the pane.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| Where | Explorer's `FileList` (every section list, Home, a project's containers, container Files) and the inspect data-tables (env, mounts, ports, networks, labels, Used by, image layers, the dropped-files dialog). The dashboard's `Board` stays as it is (proportional `fr` columns) |
+| Resize | Drag the right edge of a header cell (pointer events with capture; the body gets a `col-resizing` class for the cursor and no text selection). 40 px minimum, 2,000 px maximum. Saved on release, never while dragging |
+| Fit | Double-click the edge: the column takes the width of its widest rendered cell plus the header (FileList is virtualised, so that means the visible rows, as in AWS Explorer) |
+| Last column | The last visible column is `minmax(<width>, 1fr)` and fills the pane (no empty filler). Dragging it sets `<width>`. When the columns are wider than the pane, the list scrolls sideways with the header kept in step |
+| Show / hide | Right-click the header: a tick per column (the first, Name, can't be hidden), then "Reset column widths" and "Reset columns" (widths and visibility). Hiding the sorted column sorts by Name. Tiles view uses the 2nd and 3rd visible columns. Data-tables don't get show / hide |
+| Data-tables | Auto-sized as now until the first drag, which freezes every column at its current width (`table-layout: fixed` with a `colgroup`). Remembered per table kind; Reset brings back auto. Double-click fits |
+| Granularity | Per list kind, not per place: FileList takes a `columnsKey` (`containers`, also a project's containers since they share columns; `containers.children`, `compose`, `compose.project`, `images`, `volumes`, `networks`, `home`, `files`); data-tables a `table.<kind>` key (`table.env`, `table.mounts`, ...). Every project or folder shares its kind's layout |
+| Storage | settings.json `values`: `columns.<key>` = `{ widths: { <colId>: px }, hidden: [<colId>] }`, through `appApi.setValue` (null removes it when nothing is left). Unknown column ids and bad numbers are dropped on load, so renamed columns fall back to their defaults |
+| Pop-outs | Use and save the same values. Lists read a module store (`state/columns.ts`) the shell seeds from the settings it loads; a drag updates it and saves on release. A pop-out loads settings when it opens, so it starts from the main window's layout; a change made in a pop-out reaches the main window at its next start (`set_value` is per key, so the last write wins and nothing else is lost) |
+| Settings | A "Reset all column layouts" button, with a confirm, removes every `columns.*` value |
+| Keyboard | No new shortcuts |
+| Delivery | Three commits: 14.1 ✅ FileList resize, fit, fill, remember, and the header menu with Reset column widths; 14.2 show / hide (adds the ticks and Reset columns); 14.3 data-tables and the Settings reset |
+
+### Work
+
+- `src/state/columns.ts`: parse / clamp / merge the stored value, the
+  grid template (fixed columns, last one `minmax(w, 1fr)`), visible columns
+  (unit-tested); a module store seeded by the shell (`seedColumnLayouts`) and
+  `useColumnLayout(key, ids)` (set width, reset, save), so FileList and the
+  tables need no `Shell`.
+- `FileList`: `columnsKey` prop, resize handles in `.fl-header`, its own
+  header context menu (FileList has no `Shell`; it reuses `ContextMenu`),
+  horizontal scroll (header and canvas share one scroll width), tiles from
+  visible columns, sort falls back to Name when its column is hidden. Every
+  FileList use passes a key.
+- Data-tables: one `ResizableTable` head (`colgroup` + handles) used by
+  `Table` in `containers/views.tsx`, `UsedBy`, image layers and
+  `DropComposeDialog`.
+- Settings dialog: the reset button.
+- Styles: handle, `col-resizing`, scroll, all as tokens in both themes.
+- Tests (Vitest): `columns.ts` (clamping, bad input, template, hidden and
+  sort fallback).
+- ui-check: a scenario that drags a column, fits one, hides one, widens past
+  the pane (sideways scroll) and shows a resized data-table; both themes.
+- Help: General help (both list topics) and Container details mention
+  resize, fit and the header menu; the Settings topic the reset.
+- Docs: README, CLAUDE.md (FileList's `columnsKey`, the `columns.*`
+  values, code layout).

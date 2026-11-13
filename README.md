@@ -57,8 +57,12 @@ relaxes it to *Running and stopped* or *Everything*, and each branch ends
 with a "+ n more" row that reveals the rest of that branch. Lists in the main
 pane always show everything.
 
-Lists update live from the engine's events. Tabs, the view for each place,
-the details pane and the window's size and position come back next time.
+Lists update live from the engine's events. Drag the edge of a column
+heading to resize it, double-click the edge to fit the widest row, and
+right-click the headings to reset them; the last column fills the pane, and
+a list wider than the pane scrolls sideways. Tabs, the view for each place,
+the column widths for each kind of list, the details pane and the window's
+size and position come back next time.
 
 | | |
 |---|---|
