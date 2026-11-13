@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Help:** F1, or the ? button (at the end of the command bar, and in
+  a pop-out's status bar), shows help for the view you're on: a short topic
+  for each list, container view, compose view and resource, with its own
+  text for the dashboard's boards. Settings, compose output, drop to
+  start and image pulls have a ? in their title bar too, and F1 there
+  shows the dialog's topic. **General help** covers getting around and the
+  shortcuts; while the engine isn't connected, F1 explains connecting.
+  F1 works in a container terminal too (it isn't sent to the shell). The
+  Help menu gains Help for this view and General help.
 - **Drop to start:** drag a compose file, or a folder holding one, from
   Explorer onto the window (anywhere but a container's Files, which still
   copies in) to start its project. A confirm lists the files with tick

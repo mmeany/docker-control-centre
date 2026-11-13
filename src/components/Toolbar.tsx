@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ThemePref } from "../api/core";
 import type { ViewMode } from "./FileList";
+import { CommandSeparator } from "./CommandButton";
+import { HelpButton } from "./HelpDialog";
 import { HOME, placeCrumbs, type Place } from "../shell/places";
 import { BackIcon, CloseIcon, CopyIcon, DashboardIcon, ForwardIcon, GearIcon, PlusIcon, RefreshIcon, UpIcon } from "./Icons";
 
@@ -43,6 +45,8 @@ interface Props {
   onSwitchLayout: () => void;
   /** Help menu, at the button's bottom-left corner. */
   onOpenHelp: (x: number, y: number) => void;
+  /** Help for the current view (F1). */
+  onShowHelp: () => void;
   onRefresh: () => void;
   onCopyLocation: () => void;
   onBack: () => void;
@@ -100,7 +104,7 @@ export function Toolbar(p: Props) {
         </button>
         <button
           className="cmd-btn"
-          title="Help: what the colours mean, about this app"
+          title="Help: this view, general help, what the colours mean, about this app"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             p.onOpenHelp(r.left, r.bottom);
@@ -129,6 +133,8 @@ export function Toolbar(p: Props) {
 
       <div className="toolbar-row command-bar">
         {p.commands}
+        {p.commands && <CommandSeparator />}
+        <HelpButton onClick={p.onShowHelp} />
         <div className="spacer" />
         <div className="segmented" role="radiogroup" aria-label="View">
           {VIEWS.map((v) => (

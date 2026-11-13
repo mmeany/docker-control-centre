@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { composeApi, type DropGroup } from "../../api/compose";
 import type { AppError } from "../../api/core";
 import { fileName, projectState, type Project } from "./projects";
+import { DialogHelp } from "../../components/HelpDialog";
 
 const ROLE: Record<DropGroup["candidates"][number]["role"], string> = {
   base: "Compose file",
@@ -66,6 +67,7 @@ export function DropComposeDialog({ group, index, count, skipped, projects, show
       >
         <div className="dialog-title" id="drop-title">
           Start a compose project{count > 1 ? ` (${index} of ${count})` : ""}
+          <DialogHelp topic="compose.drop" />
         </div>
         <div className="dialog-body">
           {skipped.map((s) => (

@@ -741,3 +741,31 @@ button { font: inherit; color: inherit; }
 .bd-card-props dt { color: var(--muted); width: 104px; flex-shrink: 0; }
 .bd-card-props dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bd-card .bd-actions { justify-content: flex-start; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+
+/* Help (F1) */
+.help-btn { flex-shrink: 0; }
+.status-end { padding: 0 2px; display: flex; align-items: center; }
+.status-end .tool-btn { height: 20px; }
+.dialog-title:has(.dialog-help) { position: relative; padding-right: 40px; }
+.dialog-help { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); }
+.help-backdrop { z-index: 30; }
+.help-dialog { width: 640px; max-width: calc(100vw - 40px); max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+.help-body { flex: 1; min-height: 0; overflow: auto; outline: none; background: var(--panel-bg); }
+
+/* Markdown (help topics) */
+.md { padding: 6px 16px 14px; line-height: 1.55; font-size: 12.5px; user-select: text; color: var(--text); }
+.md h1, .md h2, .md h3, .md h4 { margin: 1em 0 0.4em; }
+.md h1 { font-size: 1.5em; }
+.md h2 { font-size: 1.3em; }
+.md h3 { font-size: 1.1em; }
+.md h4, .md h5, .md h6 { font-size: 1em; }
+.md p { margin: 0.6em 0; }
+.md code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.95em; background: var(--code-bg); border: 1px solid var(--border-light); border-radius: 3px; padding: 0 4px; }
+.md .md-code { background: var(--code-bg); border: 1px solid var(--border-light); border-radius: 4px; padding: 8px 10px; overflow: auto; line-height: 1.45; }
+.md .md-code code { background: none; border: none; padding: 0; }
+.md ul, .md ol { padding-left: 1.6em; margin: 0.5em 0; }
+.md li { margin: 0.2em 0; }
+.md li > ul, .md li > ol { margin: 0.2em 0; }
+.md-table { border-collapse: collapse; margin: 0.6em 0; }
+.md-table th, .md-table td { border: 1px solid var(--border); padding: 3px 10px; text-align: left; vertical-align: top; }
+.md-table th { background: var(--chrome); font-weight: 600; }

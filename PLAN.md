@@ -403,3 +403,44 @@ project up.
   `claimDrops`, pinned file lists in projects and lists.
 - ui-check: the mock replays Tauri drag events (`__dragOver`, `__drop`,
   `__dragLeave`); a `compose-drop` scenario.
+
+## M13: In-app help (agreed 2026-11-13)
+
+Help for the view you're on, modelled on AWS Explorer's 10.4: F1 or a ?
+button opens a short topic for the current place or open dialog.
+
+### Decisions
+
+| Area | Decision |
+|---|---|
+| Text | Short Markdown topics in `src/help/topics/<area>.ts`, written for someone looking at that view: what it shows, what you can do, its shortcuts as a table. Not generated from or into the README; some overlap is accepted. Plain English, sentence case, no exclamation marks |
+| Renderer | AWS Explorer's `viewers/markdown.tsx` ported and trimmed to what help needs (headings, paragraphs, lists, tables, inline and fenced code, bold / italic); no images, autolinks or HTML. React elements only, no `dangerouslySetInnerHTML`. No new dependencies |
+| Ids | A compiler-checked union (`HelpTopicId = keyof typeof HELP_TOPICS`), so nothing can point at a missing topic |
+| Granularity | One topic per view. Container children: logs, terminal, stats and files each have one; env, mounts, ports, networks and labels share "Container details" |
+| Layouts | List levels get a topic per layout: Home / the dashboard overview, and the container, project, image, volume and network lists (Explorer: FileList, tree; dashboard: boards, ticks, inline and bulk actions). The types make each list level name both. Detail views and dialogs have one shared topic. A general topic per layout |
+| Topic choice | Newest registered wins: `<DialogHelp topic>` in a dialog's title bar, `<HelpTopic id>` where the place alone doesn't say enough; else `placeTopic(place, layout)`. While the engine isn't connected: a Connecting topic (DOCKER_HOST, the WSL engine on tcp://localhost:2375, where to change it, docs/WSL-SETUP.md) |
+| Dialogs with help | Settings, Compose run, Drop compose files, Pull image: a ? in the title bar, and F1 while open. Confirm, prompt and typed-confirm dialogs have none. The legend and About stay as they are |
+| Display | A modal dialog over the app (above other dialogs): title, scrolling body, General help (then Back to the topic you came from), Close. Esc closes it and focus returns to what had it. No links inside topics, no contents list |
+| F1 | Anywhere, including in a container terminal (an exception to "app shortcuts don't fire in `.xterm`") and inside dialogs. A second F1 while help is open does nothing |
+| ? button | At the end of the command bar, after the section's commands (Refresh is last): Explorer always (alone at Home), the dashboard where it has a command bar; the Overview has none, so there it's in the header after Refresh. Pop-outs: at the right end of the status bar, and F1 works; they use the Explorer topics |
+| Help menu | Gains "Help for this view (F1)" and "General help" at the top, then the colours legend and About as now |
+| Maintenance | A new or changed view, tab or larger dialog updates its topic; a new one gets a topic too (CLAUDE.md rule and a step in "Adding a section") |
+
+### Work
+
+- `src/help/`: `index.ts` (`HELP_TOPICS`, `HelpTopicId`, `placeTopic(place,
+  layout)` over every section's paths), `store.ts` (register / open / close,
+  `useSyncExternalStore`), `topics/` (general for each layout, connecting,
+  home / overview, containers, compose, images, volumes, networks, dialogs).
+- `src/components/Markdown.tsx` (the trimmed port), `HelpDialog.tsx`
+  (`HelpDialog`, `HelpTopic`, `DialogHelp`), a `HelpIcon` in `Icons`; styles
+  as tokens in both themes.
+- Shell: F1 in `useAppShell` (before the `.xterm` check), the ? button in
+  `Toolbar`, `DashboardLayout` and the pop-out frame, the Help menu items,
+  `DialogHelp` in the four dialogs.
+- Tests (Vitest): every place each section can produce maps to a topic in
+  both layouts; the renderer's subset renders as expected.
+- ui-check: the help dialog over a list in each layout, over a detail view
+  and over a dialog; both themes.
+- Docs: README (F1 in the shortcuts table), CLAUDE.md (code layout, the rule,
+  the F1 exception, "Adding a section").

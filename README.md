@@ -47,6 +47,10 @@ paused or partly running, red for a crash or failing health check, blue idle
 (safe to prune). The tree counts problems and orphans per section, and
 **Help › What the colours mean** explains each one.
 
+Press **F1**, or the **?** button, for help on the view or dialog you're
+on, written for that view; **General help** in it covers getting around.
+The **Help** menu has both.
+
 The tree shows only what's live by default: running containers, anything
 with a problem, and what running containers use. **Show:** above the tree
 relaxes it to *Running and stopped* or *Everything*, and each branch ends
@@ -126,6 +130,7 @@ distro, or switch to running compose on this computer (Docker Desktop), in
 
 | Keys | Action |
 |---|---|
+| F1 | Help for the current view or dialog |
 | Enter / double-click | Open |
 | Backspace, Alt+↑ | Up one level |
 | Alt+← / Alt+→ | Back / forward |
@@ -139,7 +144,7 @@ distro, or switch to running compose on this computer (Docker Desktop), in
 | Ctrl+Shift+5 / 6 / 7 | List / details / tiles view |
 | Alt+Shift+P | Show or hide the details pane |
 
-In a terminal, the shell gets every key (Ctrl+W, Ctrl+L, …). In the
+In a terminal, the shell gets every key (Ctrl+W, Ctrl+L, …) except F1. In the
 dashboard layout the tab, address and view shortcuts do nothing; on a board,
 Ctrl+click adds to the selection and Esc clears it.
 
