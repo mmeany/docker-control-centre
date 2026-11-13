@@ -281,6 +281,8 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .fl-row.selected { background: var(--sel); border-color: var(--sel-border); }
 .file-list:not(:focus-within) .fl-row.selected { background: var(--sel-inactive); border-color: transparent; }
 .fl-cell { display: flex; align-items: center; gap: 6px; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A value that applies later (a stopped container's ports): the title says why. */
+.fl-cell.muted, .bd-cell.muted, .bd-card-props dd.muted { color: var(--muted); font-style: italic; }
 .fl-icon { display: inline-flex; flex-shrink: 0; }
 
 /* List and tiles views */

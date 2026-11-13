@@ -107,7 +107,7 @@ Running containers with a shell are listed with \`stat\`, so you see owners and 
 
 - **Environment:** its variables. Values whose names look secret (password, token, key, …) are hidden until you click **Reveal**; **Copy** copies one without showing it.
 - **Mounts:** volumes and bind mounts, where they're mounted and whether they're read-only.
-- **Ports:** published ports (reachable from this computer) and exposed ones.
+- **Ports:** published ports (reachable from this computer) and exposed ones. A container that isn't running publishes nothing, so this shows what it publishes when it starts; lists show those ports faded.
 - **Networks:** the networks it's on, with its address on each.
 - **Labels:** its labels, including compose's own (\`com.docker.compose.*\`).
 

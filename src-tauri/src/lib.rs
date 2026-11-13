@@ -31,6 +31,7 @@ pub fn run() {
                 watchers: Default::default(),
                 streams: Default::default(),
                 terminals: Default::default(),
+                port_config: Default::default(),
             });
             if let Some(main) = app.get_webview_window("main") {
                 window::restore(&main, &app.state::<AppState>().settings);

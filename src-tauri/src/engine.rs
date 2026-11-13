@@ -3,7 +3,9 @@
 //! unit-tested without an engine.
 
 use crate::error::{AppError, ErrorKind};
-use bollard::models::{ContainerSummary, EventMessage, PortSummary, SystemInfo};
+use bollard::models::{
+    ContainerInspectResponse, ContainerSummary, EventMessage, PortSummary, SystemInfo,
+};
 use bollard::{Docker, API_DEFAULT_VERSION};
 use serde::Serialize;
 use std::time::{Duration, SystemTime};
@@ -193,8 +195,11 @@ pub struct ContainerItem {
     pub health: String,
     /// ISO 8601 UTC.
     pub created: String,
-    /// "8080→80/tcp", "5432/tcp".
+    /// "8080→80/tcp", "5432/tcp": what's published now (empty unless running).
     pub ports: Vec<String>,
+    /// For a container that isn't running: what it publishes when it runs
+    /// (`configured_ports`), filled in by `list_containers`; else empty.
+    pub configured_ports: Vec<String>,
     /// Compose project, if it belongs to one.
     pub project: Option<String>,
     pub service: Option<String>,
@@ -254,6 +259,7 @@ pub fn container_item(c: ContainerSummary) -> ContainerItem {
         status,
         created,
         ports: format_ports(c.ports.unwrap_or_default()),
+        configured_ports: vec![],
         project: label(LABEL_PROJECT),
         service: label(LABEL_SERVICE),
         working_dir: label(LABEL_WORKING_DIR),
@@ -294,19 +300,79 @@ pub fn short_id(id: &str) -> &str {
 
 /// Published ports first, each once (the engine lists IPv4 and IPv6 separately).
 fn format_ports(ports: Vec<PortSummary>) -> Vec<String> {
+    port_labels(
+        ports
+            .into_iter()
+            .map(|p| {
+                let proto = p.typ.map(|t| t.to_string()).unwrap_or_else(|| "tcp".into());
+                (p.public_port, p.private_port, proto)
+            })
+            .collect(),
+    )
+}
+
+/// (host port, container port, protocol) as "8080→80/tcp", or "80/tcp" when
+/// not published; published first, then by port, each once.
+fn port_labels(ports: Vec<(Option<u16>, u16, String)>) -> Vec<String> {
     let mut out: Vec<(bool, u16, String)> = ports
         .into_iter()
-        .map(|p| {
-            let proto = p.typ.map(|t| t.to_string()).unwrap_or_else(|| "tcp".into());
-            match p.public_port {
-                Some(public) => (true, public, format!("{public}→{}/{proto}", p.private_port)),
-                None => (false, p.private_port, format!("{}/{proto}", p.private_port)),
-            }
+        .map(|(public, private, proto)| match public {
+            Some(public) => (true, public, format!("{public}→{private}/{proto}")),
+            None => (false, private, format!("{private}/{proto}")),
         })
         .collect();
     out.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
     out.dedup_by(|a, b| a.2 == b.2);
     out.into_iter().map(|(_, _, s)| s).collect()
+}
+
+/// The engine's list only reports ports while a container runs: for the
+/// others the list shows the configured ones (`configured_ports`).
+pub fn needs_configured_ports(c: &ContainerItem) -> bool {
+    c.ports.is_empty() && c.state != "running" && c.state != "paused"
+}
+
+/// What a container publishes when it runs, from its configuration (host
+/// port bindings and exposed ports), labelled as the list labels live ports.
+/// A binding without a host port (a random one) shows as the bare port.
+pub fn configured_ports(c: &ContainerInspectResponse) -> Vec<String> {
+    let split = |key: &str| -> Option<(u16, String)> {
+        let (port, proto) = key.split_once('/').unwrap_or((key, "tcp"));
+        Some((port.parse().ok()?, proto.to_string()))
+    };
+    let mut out = vec![];
+    let bindings = c
+        .host_config
+        .as_ref()
+        .and_then(|h| h.port_bindings.clone())
+        .unwrap_or_default();
+    for (key, list) in bindings {
+        let Some((private, proto)) = split(&key) else {
+            continue;
+        };
+        let list = list.unwrap_or_default();
+        if list.is_empty() {
+            out.push((None, private, proto.clone()));
+        }
+        for b in list {
+            let public = b.host_port.and_then(|p| p.parse().ok());
+            out.push((public, private, proto.clone()));
+        }
+    }
+    let exposed = c
+        .config
+        .as_ref()
+        .and_then(|c| c.exposed_ports.clone())
+        .unwrap_or_default();
+    for key in exposed {
+        if let Some((private, proto)) = split(&key) {
+            // Only when no binding covers it: "80/tcp" beside "8080→80/tcp" is noise.
+            if !out.iter().any(|(_, p, pr)| *p == private && *pr == proto) {
+                out.push((None, private, proto));
+            }
+        }
+    }
+    port_labels(out)
 }
 
 /// Sent to the UI over the engine channel.
@@ -455,6 +521,56 @@ mod tests {
         assert_eq!(bare.name, "abcdef012345");
         assert_eq!(bare.project, None);
         assert!(bare.ports.is_empty());
+        assert!(bare.configured_ports.is_empty());
+    }
+
+    #[test]
+    fn configured_ports_from_bindings_and_exposed() {
+        use bollard::models::{ContainerConfig, HostConfig, PortBinding};
+        let bind = |port: &str| PortBinding {
+            host_ip: Some(String::new()),
+            host_port: Some(port.into()),
+        };
+        let c = ContainerInspectResponse {
+            host_config: Some(HostConfig {
+                port_bindings: Some(HashMap::from([
+                    ("21/tcp".to_string(), Some(vec![bind("21")])),
+                    // IPv4 and IPv6 bindings of one port: listed once.
+                    ("80/tcp".to_string(), Some(vec![bind("8080"), bind("8080")])),
+                    // No host port: the engine picks one when it starts.
+                    ("9000/tcp".to_string(), Some(vec![bind("")])),
+                    ("53/udp".to_string(), None),
+                ])),
+                ..Default::default()
+            }),
+            config: Some(ContainerConfig {
+                exposed_ports: Some(vec!["80/tcp".into(), "443/tcp".into(), "junk".into()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            configured_ports(&c),
+            vec!["21→21/tcp", "8080→80/tcp", "53/udp", "443/tcp", "9000/tcp"]
+        );
+        assert!(configured_ports(&ContainerInspectResponse::default()).is_empty());
+    }
+
+    #[test]
+    fn configured_ports_only_for_containers_not_running() {
+        let item = |state: &str, ports: Vec<String>| ContainerItem {
+            state: state.into(),
+            ports,
+            ..container_item(ContainerSummary::default())
+        };
+        assert!(needs_configured_ports(&item("exited", vec![])));
+        assert!(needs_configured_ports(&item("created", vec![])));
+        assert!(!needs_configured_ports(&item("running", vec![])));
+        assert!(!needs_configured_ports(&item("paused", vec![])));
+        assert!(!needs_configured_ports(&item(
+            "exited",
+            vec!["80/tcp".into()]
+        )));
     }
 
     fn event(typ: EventMessageTypeEnum, action: &str) -> EventMessage {

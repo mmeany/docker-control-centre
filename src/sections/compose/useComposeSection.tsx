@@ -26,6 +26,7 @@ import { RunDialog } from "./RunDialog";
 import { attention, containerStatus, projectStatus } from "../../status/status";
 import { SectionBadge } from "../../components/SectionBadge";
 import { StatusMark } from "../../components/StatusMark";
+import { portsCell } from "../containers/ports";
 
 const SECTION = "compose";
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
@@ -293,7 +294,7 @@ export function useComposeSection(shell: Shell): SectionUi {
             service: { text: c.service ?? "", sort: c.service ?? "" },
             image: { text: c.image, sort: c.image },
             status: { text: c.status, sort: c.status },
-            ports: { text: c.ports.join(", "), sort: c.ports.join(",") },
+            ports: portsCell(c),
           },
         })),
       ]

@@ -24,6 +24,9 @@ pub struct AppState {
     pub streams: crate::streams::StreamRegistry,
     /// Open terminals by session id.
     pub terminals: tokio::sync::Mutex<std::collections::HashMap<u64, streams::Terminal>>,
+    /// Configured ports of containers that aren't running, by container id
+    /// (`list_containers`; a container's configuration never changes).
+    pub port_config: std::sync::Mutex<std::collections::HashMap<String, Vec<String>>>,
 }
 
 #[tauri::command]

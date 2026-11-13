@@ -46,6 +46,7 @@
     status,
     created: iso(opts.age ?? 30),
     ports: opts.ports ?? [],
+    configuredPorts: opts.configuredPorts ?? [],
     project: opts.project ?? null,
     service: opts.service ?? null,
     workingDir: opts.project ? `/home/mark/projects/${opts.project}` : null,
@@ -61,7 +62,7 @@
   const containers = [
     container("shop-web-1", "nginx:1.27", "running", "Up 3 hours", { project: "shop", service: "web", ports: ["8080→80/tcp"] }),
     container("shop-api-1", "shop-api:latest", "running", "Up 3 hours", { project: "shop", service: "api", ports: ["3000→3000/tcp"], volumes: ["shop_pgdata"] }),
-    container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker" }),
+    container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker", configuredPorts: ["9100→9100/tcp"] }),
     container("monitoring-prometheus-1", "prom/prometheus:v3.1.0", "running", "Up 2 days", { project: "monitoring", service: "prometheus", ports: ["9090→9090/tcp"], age: 60, volumes: ["monitoring_prom"] }),
     container("monitoring-grafana-1", "grafana/grafana:11.4.0", "paused", "Up 2 days (Paused)", { project: "monitoring", service: "grafana", ports: ["3001→3000/tcp"], age: 60 }),
     container("postgres", "postgres:17", "running", "Up 5 days (healthy)", { ports: ["5432→5432/tcp"], age: 130, health: "healthy" }),
@@ -122,7 +123,8 @@
     inspect_container: (a) => {
       const c = containers.find((x) => x.id === a.id);
       if (!c) throw { kind: "notFound", message: `No such container: ${a.id}`, detail: "" };
-      const [port, host] = (c.ports[0] || "").split("→").reverse();
+      // Not running: the configured bindings, as the engine's inspect has them.
+      const [port, host] = (c.ports[0] || c.configuredPorts[0] || "").split("→").reverse();
       return {
         id: c.id,
         name: c.name,
@@ -157,7 +159,8 @@
             ]
           : [],
         mounts: c.project ? [{ kind: "bind", name: "", source: `${c.workingDir}/data`, destination: "/data", mode: "rw", readWrite: true }] : [],
-        ports: port ? [{ containerPort: port, host: host ? [`0.0.0.0:${host}`, `[::]:${host}`] : [] }] : [],
+        ports: port ? [{ containerPort: port, host: host ? [`0.0.0.0:${host}`, ...(c.ports.length ? [`[::]:${host}`] : [])] : [] }] : [],
+        portsConfigured: !c.ports.length && c.configuredPorts.length > 0,
         networks: [{ name: c.project ? `${c.project}_default` : "bridge", ipAddress: "172.18.0.2/16", gateway: "172.18.0.1", macAddress: "02:42:ac:12:00:02", aliases: c.service ? [c.service, c.name] : [] }],
       };
     },

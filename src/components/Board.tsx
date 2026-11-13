@@ -173,7 +173,9 @@ export function Board({ columns, rows, childrenOf, layout = "table", selected, o
                   .map((c) => (
                     <div key={c.id}>
                       <dt>{c.label}</dt>
-                      <dd title={r.cells[c.id].text}>{r.cells[c.id].text}</dd>
+                      <dd className={r.cells[c.id].muted ? "muted" : ""} title={[r.cells[c.id].text, r.cells[c.id].title].filter(Boolean).join("\n")}>
+                        {r.cells[c.id].text}
+                      </dd>
                     </div>
                   ))}
               </dl>
@@ -222,7 +224,11 @@ export function Board({ columns, rows, childrenOf, layout = "table", selected, o
             {nameCell(r)}
           </span>
           {rest.map((c) => (
-            <span key={c.id} className={`bd-cell ${c.align === "right" ? "right" : ""}`} title={r.cells[c.id]?.text}>
+            <span
+              key={c.id}
+              className={`bd-cell ${c.align === "right" ? "right" : ""} ${r.cells[c.id]?.muted ? "muted" : ""}`}
+              title={[r.cells[c.id]?.text, r.cells[c.id]?.title].filter(Boolean).join("\n")}
+            >
               {r.cells[c.id]?.text ?? ""}
             </span>
           ))}

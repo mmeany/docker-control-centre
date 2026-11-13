@@ -23,7 +23,15 @@ export interface Row {
   dimmed?: boolean;
   /** Colours the name and adds the state mark; its reason is the tooltip. */
   status?: Status;
-  cells: Record<string, { text: string; sort: string | number }>;
+  cells: Record<string, Cell>;
+}
+
+export interface Cell {
+  text: string;
+  sort: string | number;
+  /** Shown faded, e.g. a value that only applies later; say why in `title`. */
+  muted?: boolean;
+  title?: string;
 }
 
 interface Props {
@@ -355,7 +363,11 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
                   <span className={`fl-name ${r.status ? `st-${r.status.state}` : ""}`}>{r.cells[c.id]?.text ?? ""}</span>
                 </span>
               ) : (
-                <span key={c.id} className={`fl-cell ${c.align === "right" ? "right" : ""}`}>
+                <span
+                  key={c.id}
+                  className={`fl-cell ${c.align === "right" ? "right" : ""} ${r.cells[c.id]?.muted ? "muted" : ""}`}
+                  title={r.cells[c.id]?.title}
+                >
                   {r.cells[c.id]?.text ?? ""}
                 </span>
               ),

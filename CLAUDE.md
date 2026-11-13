@@ -269,6 +269,11 @@ new tab", and paths with their own parser (`isPath`).
 - Engine lists reload from `shell.engine.changes`, never on a timer. The
   container list is shared as `shell.containers` (other sections show what
   uses what from it).
+- Ports: the engine's list has none for containers that aren't running, so
+  `list_containers` adds `configuredPorts` from inspect (host bindings +
+  exposed; cached per container id in `AppState.port_config`); lists show
+  them faded with a tooltip (`containers/ports.ts`, cell `muted` / `title`),
+  inspect sets `portsConfigured`.
 - Prune has no dry run in the engine: the preview is computed in
   `sections/rules.ts` and exactly those items are removed, one by one.
   Volumes are deleted with a typed confirmation; Docker's own networks
