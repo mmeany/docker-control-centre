@@ -105,6 +105,21 @@ export interface Revision {
   issues: { index: number; field: "key" | "name"; message: string }[];
 }
 
+/** A revised file to save as a move's first step. */
+export interface SaveFile {
+  path: string;
+  original: string;
+  revised: string;
+  replaceBackup: boolean;
+}
+
+/** An unnamed volume's data to copy into its named volume. */
+export interface MoveRequest {
+  from: string;
+  key: string;
+  name: string;
+}
+
 /** Settings keys (values). */
 export const COMPOSE_MODE_KEY = "compose.mode";
 export const COMPOSE_DISTRO_KEY = "compose.distro";
@@ -131,6 +146,17 @@ export const composeApi = {
   /** Saves a revised file in place, after a `.bak`; refuses if it changed since `original`. */
   saveRevision: (path: string, original: string, revised: string, replaceBackup: boolean) =>
     call<void>("compose_save_revision", { path, original, revised, replaceBackup }),
+  /** Saves the files, stops the project, copies each volume into its named one and brings it up (streamed). */
+  moveVolumes: async (target: ComposeTarget, files: SaveFile[], moves: MoveRequest[], onMessage: (m: ComposeMessage) => void) => {
+    let channel: Channel<ComposeMessage>;
+    try {
+      channel = new Channel<ComposeMessage>();
+    } catch (e) {
+      throw toAppError(e);
+    }
+    channel.onmessage = onMessage;
+    return call<number>("compose_move_volumes", { target, files, moves, onMessage: channel });
+  },
   /** A project's compose file (an engine-side or Windows path), up to 1 MB. */
   readFile: (path: string) => call<ComposeFile>("compose_read_file", { path }),
   /** Shows the file in Explorer ("folder") or opens it in its default app ("open"). */

@@ -480,6 +480,29 @@
       };
     },
     compose_save_revision: () => null,
+    // The move's steps, as Rust reports them, then a clean exit.
+    compose_move_volumes: (a) => {
+      const id = ++streamId;
+      const project = a.target.name;
+      const lines = [
+        ...a.files.map((f) => `Saved ${f.path} (the old one is in compose.yml.bak)`),
+        "> docker compose stop",
+        ` ✔ Container ${project}-web-1  Stopped`,
+        ...a.moves.flatMap((m) => [`Made volume ${m.name}`, `Copying ${m.from.slice(0, 12)}… into ${m.name}`]),
+        "> docker compose up",
+        ` ✔ Container ${project}-web-1  Started`,
+        `Done: ${project} is up on its named volumes. The old unnamed volumes are kept; nothing mounts them now, so they show as orphaned and Prune can remove them.`,
+      ];
+      let i = 0;
+      timers[id] = setInterval(() => {
+        if (i < lines.length) send(a.onMessage, { type: "line", text: lines[i++], err: false });
+        else {
+          clearInterval(timers[id]);
+          send(a.onMessage, { type: "exit", code: 0, error: null });
+        }
+      }, 30);
+      return id;
+    },
     save_text_file: () => null,
     compose_run: (a) => {
       const id = ++streamId;

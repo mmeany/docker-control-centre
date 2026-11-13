@@ -32,7 +32,10 @@ navigation, a live overview and cards instead.
   each would be called once named. Name volumes revises the compose
   files to name them (a diff per file; Copy, Save as, or Save in place
   with a `.bak`), keeping comments and layout, and gives a snippet for
-  anything it can't change safely. Each project's Compose
+  anything it can't change safely. Save and move data then stops the
+  project, copies each unnamed volume into its named one (a throwaway
+  busybox container, `cp -a`) and brings it up; the old volumes are kept
+  for Prune. Each project's Compose
   file shows the files it was started from (read-only, one tab each, with
   Show in folder and Open in editor) and, on request, the resolved config.
   Drag a compose file, or a folder holding one, from Explorer onto the

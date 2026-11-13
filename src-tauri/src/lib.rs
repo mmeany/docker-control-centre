@@ -15,6 +15,7 @@ mod streams;
 mod tar;
 mod util;
 mod volume_audit;
+mod volume_move;
 mod window;
 
 use commands::AppState;
@@ -83,6 +84,7 @@ pub fn run() {
             commands::compose::compose_unnamed_volumes,
             commands::compose::compose_name_volumes,
             commands::compose::compose_save_revision,
+            commands::compose::compose_move_volumes,
             commands::compose::save_text_file,
             commands::resources::list_images,
             commands::resources::inspect_image,

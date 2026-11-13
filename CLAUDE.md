@@ -66,7 +66,12 @@ milestones.
   files / folders are scanned in Rust (`compose_drop_candidates`: compose's
   default names, overrides, `compose-*` / `docker-compose-*` variants),
   confirmed with ticks in -f order, named by `compose_project_name` (only
-  the name crosses to the UI), then pinned and brought up.
+  the name crosses to the UI), then pinned and brought up. Unnamed
+  volumes are named by a text edit (`compose_edit`, never a YAML
+  rewrite); moving their data (`compose_move_volumes`) saves, stops,
+  makes compose-labelled volumes, copies with a busybox helper
+  (`volume_move`) and runs up, streamed to the Run dialog (no Stop). Old
+  volumes are never deleted by it.
 
 ## Dependency policy
 
@@ -167,12 +172,15 @@ src-tauri/src/commands/files.rs   list_container_dir, copy_from_container, copy_
 src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, verbs (unit-tested)
 src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, read / show
                             compose files, save_text_file, unnamed volumes, name volumes
-                            (preview) and save a revision (.bak, atomic, changed-since check)
+                            (preview), save a revision (.bak, atomic, changed-since check),
+                            move volume data (save, stop, copy, up; streamed)
 src-tauri/src/compose_edit.rs  names volumes in compose files as a text edit (no YAML crate:
                             block style only, refusals with snippets), key / name checks (unit-tested)
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
 src-tauri/src/volume_audit.rs  unnamed volumes: causes, a project's findings from compose
                             config + image VOLUMEs + containers, proposed names (unit-tested)
+src-tauri/src/volume_move.rs  moving volume data: compose-labelled volumes, the busybox copy
+                            helper (run, wait, remove), what's done after a failure (unit-tested)
 src-tauri/src/commands/resources.rs  list, inspect, remove (per-item results), pull
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
 src-tauri/src/engine.rs     Endpoint (DOCKER_HOST), Engine, error mapping, DTOs and
@@ -403,9 +411,9 @@ Details in `PLAN.md`.)
     show / hide columns and reset; inspect tables resizable too; remembered
     per list kind in settings values (`columns.*`); Settings resets them all.
     14.1 resize, 14.2 show / hide, 14.3 data-tables and Settings reset.
-15. Unnamed volumes (see PLAN.md, M15): anonymous volumes marked with
+15. ✅ Unnamed volumes (see PLAN.md, M15): anonymous volumes marked with
     their cause on containers and in the volumes list; a project's
     `/compose/<project>/volumes` view; a revised compose file naming them
     (diff, Copy / Save as / Save in place with `.bak`); optionally move
     their data into the named volumes and bring the project up.
-    15.1 ✅ find and show, 15.2 ✅ project view, 15.3 ✅ revise, 15.4 move data.
+    15.1 ✅ find and show, 15.2 ✅ project view, 15.3 ✅ revise, 15.4 ✅ move data.

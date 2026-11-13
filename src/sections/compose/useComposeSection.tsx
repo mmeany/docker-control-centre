@@ -6,7 +6,7 @@
 // the window (anywhere but container Files) are confirmed, pinned and brought up.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
-import { composeApi, COMPOSE_DISTRO_KEY, type ComposeTarget, type ComposeVerb, type DropGroup, type UnnamedVolume } from "../../api/compose";
+import { composeApi, COMPOSE_DISTRO_KEY, type ComposeTarget, type ComposeVerb, type DropGroup, type MoveRequest, type SaveFile, type UnnamedVolume } from "../../api/compose";
 import { Board, type BoardAction } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
@@ -94,11 +94,12 @@ export function useComposeSection(shell: Shell): SectionUi {
   /**
    * A run in progress, with its own id (the Run dialog's key, so a new run
    * never shows in an old one's dialog); openAfter: go to the project when
-   * it succeeds (drops).
+   * it succeeds (drops); move: save, stop, copy volume data and up instead.
    */
-  const [running, setRunning] = useState<{ id: number; project: Project; verb: ComposeVerb; openAfter?: boolean } | null>(null);
+  type Run = { project: Project; verb: ComposeVerb; openAfter?: boolean; move?: { files: SaveFile[]; moves: MoveRequest[] } };
+  const [running, setRunning] = useState<(Run & { id: number }) | null>(null);
   const runIds = useRef(0);
-  const startRun = (r: { project: Project; verb: ComposeVerb; openAfter?: boolean }) => setRunning({ ...r, id: ++runIds.current });
+  const startRun = (r: Run) => setRunning({ ...r, id: ++runIds.current });
   /**
    * Dropped projects waiting to be confirmed, one at a time; skipped: why
    * dropped folders that can't be used were left out (shown in the first).
@@ -610,13 +611,14 @@ export function useComposeSection(shell: Shell): SectionUi {
   const dialogs = running ? (
     <RunDialog
       key={running.id}
-      title={`${VERBS[running.verb].doing} · ${running.project.name}`}
+      title={`${running.move ? "Moving volume data" : VERBS[running.verb].doing} · ${running.project.name}`}
       target={targetOf(running.project)}
       verb={running.verb}
+      start={running.move ? ((m) => (onMessage) => composeApi.moveVolumes(targetOf(running.project), m.files, m.moves, onMessage))(running.move) : undefined}
       onClose={(ok) => {
         const r = running;
         setRunning(null);
-        if (ok) shell.showFlash(`${VERBS[r.verb].label}: ${r.project.name} done`);
+        if (ok) shell.showFlash(r.move ? `${r.project.name} is up on its named volumes` : `${VERBS[r.verb].label}: ${r.project.name} done`);
         if (ok && r.openAfter) go(r.project.name);
         refresh();
       }}
@@ -631,6 +633,11 @@ export function useComposeSection(shell: Shell): SectionUi {
       onSaved={() => {
         setNaming(null);
         refresh();
+      }}
+      onMove={(files, moves) => {
+        const p = byName.get(naming.project);
+        setNaming(null);
+        if (p) startRun({ project: p, verb: "up", move: { files, moves } });
       }}
       onClose={() => setNaming(null)}
     />
