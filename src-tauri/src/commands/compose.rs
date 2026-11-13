@@ -3,8 +3,12 @@
 
 use super::AppState;
 use crate::compose::{self, Candidate, Distro, Pinned, Runner, Target};
-use crate::error::AppError;
+use crate::engine::map_error;
+use crate::error::{AppError, ErrorKind};
+use crate::volume_audit::{self, ImageVolumes, LiveMount, ProjectSpec, UnnamedVolumes};
+use bollard::query_parameters::ListContainersOptionsBuilder;
 use serde::Serialize;
+use std::collections::{BTreeMap, HashMap};
 use std::process::Stdio;
 use tauri::ipc::Channel;
 use tauri::{Manager, State, Window};
@@ -519,6 +523,109 @@ pub async fn save_text_file(path: String, text: String) -> Result<(), AppError> 
 /// Against a real engine through WSL (`cargo test --features integration`):
 /// a project in a Windows temp folder with a bind mount comes up with the
 /// mount resolved on the Linux side, then goes down again.
+/// The project's unnamed volumes: what compose's config and the images say,
+/// plus what its containers hold now. The resolved config can hold secrets:
+/// only services, images and volume targets are read from it.
+#[tauri::command]
+pub async fn compose_unnamed_volumes(
+    state: State<'_, AppState>,
+    target: Target,
+) -> Result<UnnamedVolumes, AppError> {
+    let docker = state.engine.docker()?;
+    let endpoint = state.engine.endpoint.display();
+
+    let (spec, config_error) = match read_spec(&state, &target).await {
+        Ok(s) => (Some(s), None),
+        Err(e) => (None, Some(e.message)),
+    };
+    let project = spec
+        .as_ref()
+        .and_then(|s| s.name.clone())
+        .or_else(|| target.name.clone().filter(|n| !n.is_empty()))
+        .unwrap_or_else(|| compose::default_project_name(&target.dir));
+
+    let label = format!("{}={project}", crate::engine::LABEL_PROJECT);
+    let filters = HashMap::from([("label", vec![label.as_str()])]);
+    let opts = ListContainersOptionsBuilder::new()
+        .all(true)
+        .filters(&filters)
+        .build();
+    let list = docker
+        .list_containers(Some(opts))
+        .await
+        .map_err(|x| map_error(endpoint, x))?;
+    let mut live = vec![];
+    // The image each service runs: a container's exact image first.
+    let mut image_of: BTreeMap<String, String> = BTreeMap::new();
+    for c in list.into_iter().map(crate::engine::container_item) {
+        let Some(service) = c.service.clone() else {
+            continue;
+        };
+        image_of
+            .entry(service.clone())
+            .or_insert(c.image_id.clone());
+        for m in c.volume_mounts {
+            if volume_audit::is_anonymous_name(&m.name) {
+                live.push(LiveMount {
+                    container: c.name.clone(),
+                    service: service.clone(),
+                    volume: m.name,
+                    destination: m.destination,
+                });
+            }
+        }
+    }
+    for s in spec.iter().flat_map(|p| &p.services) {
+        image_of.entry(s.name.clone()).or_insert(s.image.clone());
+    }
+    let mut images = BTreeMap::new();
+    for (service, image) in image_of {
+        let v = match docker.inspect_image(&image).await {
+            Ok(i) => ImageVolumes::Known(i.config.and_then(|c| c.volumes).unwrap_or_default()),
+            Err(e) => {
+                let e = map_error(endpoint, e);
+                if e.kind != ErrorKind::NotFound {
+                    return Err(e);
+                }
+                ImageVolumes::NotLocal
+            }
+        };
+        images.insert(service, v);
+    }
+    let (findings, unchecked) = volume_audit::find(&project, spec.as_ref(), &images, &live);
+    Ok(UnnamedVolumes {
+        project,
+        findings,
+        unchecked,
+        config_error,
+    })
+}
+
+/// Compose's resolved config for a target, reduced to what the audit needs.
+async fn read_spec(state: &AppState, target: &Target) -> Result<ProjectSpec, AppError> {
+    if target.files.is_empty() && target.dir.is_empty() {
+        return Err(AppError::invalid("There are no compose files to read."));
+    }
+    let runs_in = wsl_runs_in(state).await;
+    for f in &target.files {
+        compose::check_distro(f, runs_in.as_deref())?;
+    }
+    let out = run_once(&runner(state), target, "config").await?;
+    if out.code != Some(0) {
+        let msg = out.stderr.trim();
+        return Err(AppError::invalid(format!(
+            "Compose couldn't read the files: {}",
+            if msg.is_empty() { "no details" } else { msg }
+        )));
+    }
+    let v: serde_json::Value = serde_json::from_str(&out.stdout)
+        .map_err(|e| AppError::from(format!("Compose's config wasn't JSON: {e}")))?;
+    Ok(volume_audit::parse_config(
+        &v,
+        target.name.as_deref().unwrap_or_default(),
+    ))
+}
+
 #[cfg(all(test, feature = "integration", windows))]
 mod integration {
     use super::*;

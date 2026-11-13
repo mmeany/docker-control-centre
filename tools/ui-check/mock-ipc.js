@@ -27,6 +27,8 @@
     { name: "legacy_db", driver: "local", mountpoint: "/var/lib/docker/volumes/legacy_db/_data", created: iso(4000), scope: "local", anonymous: false, project: "legacy", labels: [{ key: "com.docker.compose.project", value: "legacy" }], options: [] },
     { name: "old_cache", driver: "local", mountpoint: "/var/lib/docker/volumes/old_cache/_data", created: iso(2000), scope: "local", anonymous: false, project: null, labels: [], options: [] },
     { name: hex(5), driver: "local", mountpoint: "/var/lib/docker/volumes/x/_data", created: iso(500), scope: "local", anonymous: true, project: null, labels: [], options: [] },
+    // Postgres's image VOLUME, mounted by the plain postgres container.
+    { name: hex(6), driver: "local", mountpoint: `/var/lib/docker/volumes/${hex(6)}/_data`, created: iso(130), scope: "local", anonymous: true, project: null, labels: [{ key: "com.docker.volume.anonymous", value: "" }], options: [] },
   ];
   const network = (name, subnet, opts = {}) => ({ id: hex(name.length * 3), name, driver: opts.driver ?? "bridge", scope: "local", created: iso(800), internal: false, attachable: false, ipv6: false, subnets: subnet ? [subnet] : [], gateways: subnet ? [subnet.replace(/0\/16$/, "1")] : [], builtin: !!opts.builtin, project: opts.project ?? null, labels: [], options: [] });
   const networks = [
@@ -57,6 +59,7 @@
     exitCode: /^Exited \((\d+)\)/.test(status) ? Number(/^Exited \((\d+)\)/.exec(status)[1]) : null,
     health: opts.health ?? "",
     volumes: opts.volumes ?? [],
+    volumeMounts: (opts.volumes ?? []).map((name) => ({ name, destination: opts.mountAt?.[name] ?? "/data" })),
     networks: opts.project ? [`${opts.project}_default`] : ["bridge"],
   });
   const containers = [
@@ -65,7 +68,7 @@
     container("shop-worker-1", "shop-api:latest", "exited", "Exited (0) 2 hours ago", { project: "shop", service: "worker", configuredPorts: ["9100→9100/tcp"] }),
     container("monitoring-prometheus-1", "prom/prometheus:v3.1.0", "running", "Up 2 days", { project: "monitoring", service: "prometheus", ports: ["9090→9090/tcp"], age: 60, volumes: ["monitoring_prom"] }),
     container("monitoring-grafana-1", "grafana/grafana:11.4.0", "paused", "Up 2 days (Paused)", { project: "monitoring", service: "grafana", ports: ["3001→3000/tcp"], age: 60 }),
-    container("postgres", "postgres:17", "running", "Up 5 days (healthy)", { ports: ["5432→5432/tcp"], age: 130, health: "healthy" }),
+    container("postgres", "postgres:17", "running", "Up 5 days (healthy)", { ports: ["5432→5432/tcp"], age: 130, health: "healthy", volumes: [hex(6)], mountAt: { [hex(6)]: "/var/lib/postgresql/data" } }),
     container("api-canary", "shop-api:latest", "running", "Up 2 hours (unhealthy)", { ports: ["3100→3000/tcp"], age: 3, health: "unhealthy" }),
     container("redis-scratch", "redis:7.4", "exited", "Exited (137) 3 days ago", { age: 80 }),
   ];
@@ -158,7 +161,18 @@
               { key: "com.docker.compose.service", value: c.service },
             ]
           : [],
-        mounts: c.project ? [{ kind: "bind", name: "", source: `${c.workingDir}/data`, destination: "/data", mode: "rw", readWrite: true }] : [],
+        mounts: [
+          ...(c.project ? [{ kind: "bind", name: "", source: `${c.workingDir}/data`, destination: "/data", mode: "rw", readWrite: true, anonymous: null }] : []),
+          ...c.volumeMounts.map((m) => ({
+            kind: "volume",
+            name: m.name,
+            source: `/var/lib/docker/volumes/${m.name}/_data`,
+            destination: m.destination,
+            mode: "z",
+            readWrite: true,
+            anonymous: /^[0-9a-f]{64}$/.test(m.name) ? (c.image.startsWith("postgres") ? "image" : "noSource") : null,
+          })),
+        ],
         ports: port ? [{ containerPort: port, host: host ? [`0.0.0.0:${host}`, ...(c.ports.length ? [`[::]:${host}`] : [])] : [] }] : [],
         portsConfigured: !c.ports.length && c.configuredPorts.length > 0,
         networks: [{ name: c.project ? `${c.project}_default` : "bridge", ipAddress: "172.18.0.2/16", gateway: "172.18.0.1", macAddress: "02:42:ac:12:00:02", aliases: c.service ? [c.service, c.name] : [] }],
@@ -416,6 +430,17 @@
       return { path: local, text, size: text.length };
     },
     compose_show_file: () => null,
+    // Shop's worker asks for /tmp/cache with no name; nothing for other projects.
+    compose_unnamed_volumes: (a) => {
+      const project = a.target.name ?? "";
+      if (project !== "shop") return { project, findings: [], unchecked: [], configError: null };
+      return {
+        project,
+        findings: [{ service: "worker", target: "/tmp/cache", cause: "noSource", current: [], key: "worker-cache", name: "shop-worker-cache" }],
+        unchecked: [],
+        configError: null,
+      };
+    },
     save_text_file: () => null,
     compose_run: (a) => {
       const id = ++streamId;

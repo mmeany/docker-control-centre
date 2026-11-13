@@ -155,5 +155,20 @@ pub async fn inspect_container(
         .inspect_container(&id, None)
         .await
         .map_err(|x| e.error(x))?;
-    Ok(containers::container_details(c))
+    let image = c.image.clone().unwrap_or_default();
+    let mut d = containers::container_details(c);
+    if d.mounts.iter().any(|m| m.anonymous.is_some()) {
+        let volumes = image_volumes(e.docker()?, &image).await;
+        containers::set_mount_causes(&mut d, volumes.as_deref());
+    }
+    Ok(d)
+}
+
+/// The paths an image declares as `VOLUME`; None when it can't be read (gone).
+pub async fn image_volumes(docker: &bollard::Docker, image: &str) -> Option<Vec<String>> {
+    if image.is_empty() {
+        return None;
+    }
+    let i = docker.inspect_image(image).await.ok()?;
+    Some(i.config.and_then(|c| c.volumes).unwrap_or_default())
 }

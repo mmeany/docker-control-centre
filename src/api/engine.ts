@@ -41,9 +41,19 @@ export interface ContainerItem {
   configFiles: string[];
   /** Volumes it mounts, by name. */
   volumes: string[];
+  /** The same volumes with where each is mounted, in the same order. */
+  volumeMounts: VolumeMount[];
   /** Networks it's on, by name. */
   networks: string[];
 }
+
+export interface VolumeMount {
+  name: string;
+  destination: string;
+}
+
+/** Why Docker made an anonymous volume: an image VOLUME nothing mounts over, a mount given no source, or can't tell. */
+export type AnonymousCause = "image" | "noSource" | "unknown";
 
 export type ContainerAction =
   | { type: "start" | "stop" | "restart" | "pause" | "unpause" | "kill" }
@@ -67,6 +77,8 @@ export interface MountInfo {
   destination: string;
   mode: string;
   readWrite: boolean;
+  /** Set for an anonymous volume: why Docker made it. */
+  anonymous: AnonymousCause | null;
 }
 
 export interface PortInfo {

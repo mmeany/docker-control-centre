@@ -104,6 +104,7 @@ src/sections/index.ts       SECTIONS registry (id, name, icon, root path, crumbs
                             parent / uri helpers, controller hook)
 src/sections/<id>/          one folder per section; use<Id>Section.tsx returns SectionUi
 src/sections/images/, volumes/, networks/   one-level sections (list + item detail)
+src/sections/volumes/anonymous.ts  anonymous volume labels (who mounts it) and causes (unit-tested)
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
                             RunDialog (streamed output), ComposeFileView (files + resolved),
                             DropComposeDialog (dropped files: ticks, name, clash), the section
@@ -165,6 +166,8 @@ src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, ver
 src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, read / show
                             compose files, save_text_file
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
+src-tauri/src/volume_audit.rs  unnamed volumes: causes, a project's findings from compose
+                            config + image VOLUMEs + containers, proposed names (unit-tested)
 src-tauri/src/commands/resources.rs  list, inspect, remove (per-item results), pull
 src-tauri/src/window.rs     window size / position / maximised, restored before showing
 src-tauri/src/engine.rs     Endpoint (DOCKER_HOST), Engine, error mapping, DTOs and
@@ -395,3 +398,9 @@ Details in `PLAN.md`.)
     show / hide columns and reset; inspect tables resizable too; remembered
     per list kind in settings values (`columns.*`); Settings resets them all.
     14.1 resize, 14.2 show / hide, 14.3 data-tables and Settings reset.
+15. Unnamed volumes (see PLAN.md, M15): anonymous volumes marked with
+    their cause on containers and in the volumes list; a project's
+    `/compose/<project>/volumes` view; a revised compose file naming them
+    (diff, Copy / Save as / Save in place with `.bak`); optionally move
+    their data into the named volumes and bring the project up.
+    15.1 ✅ find and show, 15.2 project view, 15.3 revise, 15.4 move data.

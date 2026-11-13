@@ -348,7 +348,12 @@ export function FileList({ columns: allColumns, rows, selected, onSelectionChang
                 <span key={c.id} className="fl-cell">
                   {r.status && <StatusMark status={r.status} />}
                   <span className="fl-icon">{r.icon}</span>
-                  <span className={`fl-name ${r.status ? `st-${r.status.state}` : ""}`}>{r.cells[c.id]?.text ?? ""}</span>
+                  <span
+                    className={`fl-name ${r.status ? `st-${r.status.state}` : ""}`}
+                    title={r.cells[c.id]?.title && `${r.cells[c.id]?.title}${r.status ? ` · ${statusTip(r.status)}` : ""}`}
+                  >
+                    {r.cells[c.id]?.text ?? ""}
+                  </span>
                 </span>
               ) : (
                 <span
