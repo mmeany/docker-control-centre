@@ -1,7 +1,8 @@
 // A compose project's unnamed volumes (/compose/<project>/volumes): the list
 // with causes and proposed names, opening the volume a container holds, a
 // service whose image can't be checked, the Name volumes dialog (diff,
-// snippet fallback, name clash, save) and the dashboard's board.
+// snippet fallback, name clash, save, save and move data) and the
+// dashboard's board.
 module.exports = async (page, { shot }) => {
   await page.waitForSelector(".status-bar:has-text('ubuntu-dev · tcp://localhost:2375')");
   const go = async (address) => {
@@ -46,6 +47,18 @@ module.exports = async (page, { shot }) => {
   await save.click();
   await page.waitForSelector(".name-volumes-dialog", { state: "detached" });
   await page.waitForSelector(":text('Saved compose.yml')");
+
+  // Save and move data: confirm, then the steps in the Run dialog.
+  await page.click(".cmd-btn:has-text('Name volumes')");
+  await dlg.locator(".diff-line.add:has-text('- web-nginx:/var/cache/nginx')").waitFor();
+  await dlg.locator("button:has-text('Save and move data')").click();
+  await page.click("button:text-is('Save and move')");
+  await page.waitForSelector(".dialog-title:has-text('Moving volume data · shop')");
+  await page.waitForSelector(".run-output :text('Copying')");
+  await page.waitForSelector(".ok-note:has-text('Finished.')");
+  await shot("compose-move-data");
+  await page.click(".dialog button:has-text('Close')");
+  await page.waitForSelector(":text('shop is up on its named volumes')");
 
   // A service whose image isn't pulled.
   await go("/compose/monitoring/volumes");

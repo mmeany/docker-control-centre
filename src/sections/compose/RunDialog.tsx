@@ -1,7 +1,9 @@
 // Output of a compose run (up, down, pull, …) as it happens. Stop kills it.
+// `start` runs something else on the same channel (moving volume data),
+// which can't be stopped halfway.
 import { useEffect, useRef, useState } from "react";
 import type { AppError } from "../../api/core";
-import { composeApi, type ComposeTarget, type ComposeVerb } from "../../api/compose";
+import { composeApi, type ComposeMessage, type ComposeTarget, type ComposeVerb } from "../../api/compose";
 import { streamsApi } from "../../api/streams";
 import { DialogHelp } from "../../components/HelpDialog";
 
@@ -9,11 +11,13 @@ interface Props {
   title: string;
   target: ComposeTarget;
   verb: ComposeVerb;
+  /** Runs this instead of the verb; it can't be stopped while it runs. */
+  start?: (onMessage: (m: ComposeMessage) => void) => Promise<number>;
   /** When the dialog closes; ok = exit code 0. */
   onClose: (ok: boolean) => void;
 }
 
-export function RunDialog({ title, target, verb, onClose }: Props) {
+export function RunDialog({ title, target, verb, start, onClose }: Props) {
   const [lines, setLines] = useState<{ text: string; err: boolean }[]>([]);
   const [exit, setExit] = useState<{ code: number | null; error: string | null } | null>(null);
   const stream = useRef<number | null>(null);
@@ -21,12 +25,12 @@ export function RunDialog({ title, target, verb, onClose }: Props) {
 
   useEffect(() => {
     let live = true;
-    composeApi
-      .run(target, verb, (m) => {
-        if (!live) return;
-        if (m.type === "line") setLines((l) => [...l, { text: m.text, err: m.err }]);
-        else setExit({ code: m.code, error: m.error });
-      })
+    const onMessage = (m: ComposeMessage) => {
+      if (!live) return;
+      if (m.type === "line") setLines((l) => [...l, { text: m.text, err: m.err }]);
+      else setExit({ code: m.code, error: m.error });
+    };
+    (start ? start(onMessage) : composeApi.run(target, verb, onMessage))
       .then((id) => {
         if (live) stream.current = id;
         else void streamsApi.stop(id).catch(() => {});
@@ -80,8 +84,8 @@ export function RunDialog({ title, target, verb, onClose }: Props) {
         </div>
         <div className="dialog-buttons">
           <div className="spacer" />
-          <button className={`btn ${running ? "" : "primary"}`} onClick={close} autoFocus={!running}>
-            {running ? "Stop" : "Close"}
+          <button className={`btn ${running ? "" : "primary"}`} onClick={close} autoFocus={!running} disabled={running && !!start} title={running && start ? "Wait for it to finish: stopping halfway would leave the copy incomplete" : undefined}>
+            {running && !start ? "Stop" : "Close"}
           </button>
         </div>
       </div>

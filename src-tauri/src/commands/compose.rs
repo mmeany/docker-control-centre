@@ -7,8 +7,9 @@ use crate::compose_edit::{self, Issue, Manual, NameRequest};
 use crate::engine::map_error;
 use crate::error::{AppError, ErrorKind};
 use crate::volume_audit::{self, ImageVolumes, LiveMount, ProjectSpec, UnnamedVolumes};
+use crate::volume_move::{self, MoveRequest};
 use bollard::query_parameters::ListContainersOptionsBuilder;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::process::Stdio;
 use tauri::ipc::Channel;
@@ -725,10 +726,20 @@ pub async fn compose_save_revision(
     replace_backup: bool,
 ) -> Result<(), AppError> {
     let local = local_path(&state, &path).await?;
-    if !compose::is_compose_file(&local) {
+    save_file(&local, &original, &revised, replace_backup).await
+}
+
+/// Saves a revised compose file at a local path (see compose_save_revision).
+async fn save_file(
+    local: &str,
+    original: &str,
+    revised: &str,
+    replace_backup: bool,
+) -> Result<(), AppError> {
+    if !compose::is_compose_file(local) {
         return Err(AppError::invalid(format!("{local} isn't a compose file.")));
     }
-    let current = read_text(&local).await?;
+    let current = read_text(local).await?;
     if current != original {
         return Err(AppError::invalid(format!(
             "{local} changed since it was read. Open Name volumes again to revise it as it is now."
@@ -742,14 +753,177 @@ pub async fn compose_save_revision(
         .await
         .map_err(|e| AppError::io(e, &backup))?;
     let temp = format!("{local}.dcc-new");
-    tokio::fs::write(&temp, &revised)
+    tokio::fs::write(&temp, revised)
         .await
         .map_err(|e| AppError::io(e, &temp))?;
-    if let Err(e) = tokio::fs::rename(&temp, &local).await {
+    if let Err(e) = tokio::fs::rename(&temp, local).await {
         let _ = tokio::fs::remove_file(&temp).await;
-        return Err(AppError::io(e, &local));
+        return Err(AppError::io(e, local));
     }
     Ok(())
+}
+
+/// A revised file to save as the first step of a move.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFile {
+    pub path: String,
+    pub original: String,
+    pub revised: String,
+    pub replace_backup: bool,
+}
+
+/// Saves the revised files, stops the project, makes the named volumes,
+/// copies each unnamed volume into its named one, and brings the project up,
+/// streaming what it does. Stops at the first failure and says what's done.
+#[tauri::command]
+pub async fn compose_move_volumes(
+    window: Window,
+    state: State<'_, AppState>,
+    target: Target,
+    files: Vec<SaveFile>,
+    moves: Vec<MoveRequest>,
+    on_message: Channel<ComposeMessage>,
+) -> Result<u64, AppError> {
+    if target.name.as_deref().unwrap_or_default().is_empty() {
+        return Err(AppError::invalid(
+            "The project has no name to run compose with.",
+        ));
+    }
+    volume_move::check_moves(&moves)?;
+    let runs_in = wsl_runs_in(&state).await;
+    for f in &target.files {
+        compose::check_distro(f, runs_in.as_deref())?;
+    }
+    let mut local = vec![];
+    for f in files {
+        local.push(SaveFile {
+            path: local_path(&state, &f.path).await?,
+            ..f
+        });
+    }
+    let docker = state.engine.docker()?.clone();
+    let endpoint = state.engine.endpoint.display().to_string();
+    let runner = runner(&state);
+    let id = state.streams.next_id();
+    let app = window.app_handle().clone();
+    let task = tauri::async_runtime::spawn(async move {
+        let ch = on_message.clone();
+        let emit = move |text: String, err: bool| {
+            let _ = ch.send(ComposeMessage::Line { text, err });
+        };
+        let result =
+            move_sequence(&docker, &endpoint, &runner, &target, &local, &moves, &emit).await;
+        let msg = match result {
+            Ok(()) => ComposeMessage::Exit {
+                code: Some(0),
+                error: None,
+            },
+            Err(e) => ComposeMessage::Exit {
+                code: Some(1),
+                error: Some(e),
+            },
+        };
+        let _ = on_message.send(msg);
+        app.state::<AppState>().streams.done(id);
+    });
+    state.streams.add(id, window.label(), task);
+    Ok(id)
+}
+
+/// Runs a compose verb to the end, passing on what it printed.
+async fn run_verb(
+    runner: &Runner,
+    target: &Target,
+    verb: &str,
+    emit: &(dyn Fn(String, bool) + Send + Sync),
+) -> Result<(), AppError> {
+    emit(format!("> docker compose {verb}"), false);
+    let out = run_once(runner, target, verb).await?;
+    for (text, err) in [(&out.stdout, false), (&out.stderr, true)] {
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            emit(crate::streams::strip_ansi(line.trim_end()), err);
+        }
+    }
+    match out.code {
+        Some(0) => Ok(()),
+        code => Err(AppError::from(format!(
+            "docker compose {verb} stopped with exit code {}.",
+            code.map_or("unknown".into(), |c| c.to_string())
+        ))),
+    }
+}
+
+/// The move itself (the command's task; also run by the integration test).
+pub async fn move_sequence(
+    docker: &bollard::Docker,
+    endpoint: &str,
+    runner: &Runner,
+    target: &Target,
+    files: &[SaveFile],
+    moves: &[MoveRequest],
+    emit: &(dyn Fn(String, bool) + Send + Sync),
+) -> Result<(), String> {
+    let project = target.name.clone().unwrap_or_default();
+    let mut done = volume_move::Progress {
+        total: moves.len(),
+        ..Default::default()
+    };
+    let fail = |e: AppError, done: &volume_move::Progress| format!("{} {}", e.message, done.note());
+    for f in files {
+        save_file(&f.path, &f.original, &f.revised, f.replace_backup)
+            .await
+            .map_err(|e| fail(e, &done))?;
+        done.saved += 1;
+        emit(
+            format!(
+                "Saved {} (the old one is in {}.bak)",
+                f.path,
+                compose_file_name(&f.path)
+            ),
+            false,
+        );
+    }
+    run_verb(runner, target, "stop", emit)
+        .await
+        .map_err(|e| fail(e, &done))?;
+    done.stopped = true;
+    let note = |s: String| emit(s, false);
+    volume_move::ensure_helper_image(docker, endpoint, &note)
+        .await
+        .map_err(|e| fail(e, &done))?;
+    for m in moves {
+        let made = volume_move::ensure_volume(docker, endpoint, &project, m)
+            .await
+            .map_err(|e| fail(e, &done))?;
+        emit(
+            format!(
+                "{} volume {}",
+                if made { "Made" } else { "Using the existing" },
+                m.name
+            ),
+            false,
+        );
+        emit(format!("Copying {}… into {}", &m.from[..12], m.name), false);
+        volume_move::copy_volume(docker, endpoint, &m.from, &m.name)
+            .await
+            .map_err(|e| fail(e, &done))?;
+        done.copied += 1;
+    }
+    run_verb(runner, target, "up", emit)
+        .await
+        .map_err(|e| fail(e, &done))?;
+    emit(
+        format!(
+            "Done: {project} is up on its named volumes. The old unnamed volumes are kept; nothing mounts them now, so they show as orphaned and Prune can remove them."
+        ),
+        false,
+    );
+    Ok(())
+}
+
+fn compose_file_name(p: &str) -> &str {
+    p.rsplit(['/', '\\']).next().unwrap_or(p)
 }
 
 /// Against a real engine through WSL (`cargo test --features integration`):
@@ -830,6 +1004,109 @@ mod integration {
         )
         .output()
         .await;
+    }
+
+    /// A service with `- /data` (no name) writes an id into its anonymous
+    /// volume; naming it in the file and moving the data brings it up on the
+    /// named volume with the same id, and the old volume is kept.
+    #[tokio::test]
+    async fn names_and_moves_an_unnamed_volume() {
+        let engine = Engine::from_env();
+        let docker = engine.docker().expect("client");
+        let endpoint = engine.endpoint.display().to_string();
+        let name = format!("dcc-move-{}", std::process::id());
+        let dir = std::env::temp_dir().join(&name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("compose.yml");
+        let text = "# a comment that stays\nservices:\n  app:\n    image: busybox:latest\n    command: [\"sh\", \"-c\", \"[ -f /data/id ] || cat /proc/sys/kernel/random/uuid > /data/id; sleep 300\"]\n    volumes:\n      - /data\n";
+        std::fs::write(&file, text).unwrap();
+        let runner = Runner::Wsl { distro: None };
+        let target = Target {
+            name: Some(name.clone()),
+            dir: dir.to_string_lossy().to_string(),
+            files: vec![file.to_string_lossy().to_string()],
+        };
+        let noop = |_: String| {};
+        volume_move::ensure_helper_image(docker, &endpoint, &noop)
+            .await
+            .expect("busybox");
+        let up = run_once(&runner, &target, "up").await.expect("up");
+        assert_eq!(up.code, Some(0), "{up:?}");
+
+        let mount_at_data = |list: Vec<bollard::models::ContainerSummary>| {
+            list.into_iter()
+                .map(container_item)
+                .filter(|c| c.project.as_deref() == Some(&name))
+                .flat_map(|c| c.volume_mounts)
+                .find(|m| m.destination == "/data")
+                .expect("a volume at /data")
+                .name
+        };
+        let all = || ListContainersOptionsBuilder::new().all(true).build();
+        let old = mount_at_data(docker.list_containers(Some(all())).await.unwrap());
+        assert!(volume_audit::is_anonymous_name(&old), "{old}");
+        let ep = endpoint.as_str();
+        let read = |v: String| async move {
+            volume_move::run_helper(docker, ep, volume_move::read_body(&v, "cat /v/id"))
+                .await
+                .expect("read")
+        };
+        let (code, id) = read(old.clone()).await;
+        assert_eq!(code, 0, "{id}");
+
+        let key = "app-data".to_string();
+        let named = format!("{name}-app-data");
+        let req = NameRequest {
+            service: "app".into(),
+            target: "/data".into(),
+            key: key.clone(),
+            name: named.clone(),
+        };
+        let (revised, manual) =
+            compose_edit::revise(&[(target.files[0].clone(), text.to_string())], &[req]);
+        assert!(manual.is_empty(), "{manual:?}");
+        let files = [SaveFile {
+            path: target.files[0].clone(),
+            original: text.into(),
+            revised: revised[0].clone(),
+            replace_backup: false,
+        }];
+        let moves = [MoveRequest {
+            from: old.clone(),
+            key,
+            name: named.clone(),
+        }];
+        let lines = std::sync::Mutex::new(vec![]);
+        let emit = |t: String, _: bool| lines.lock().unwrap().push(t);
+        let moved = move_sequence(docker, &endpoint, &runner, &target, &files, &moves, &emit).await;
+        assert!(moved.is_ok(), "{moved:?}\n{:?}", lines.lock().unwrap());
+
+        let now = mount_at_data(docker.list_containers(Some(all())).await.unwrap());
+        assert_eq!(now, named);
+        assert_eq!(read(named.clone()).await, (0, id));
+        assert!(
+            docker.inspect_volume(&old).await.is_ok(),
+            "the old volume is kept"
+        );
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            saved.starts_with("# a comment that stays\n")
+                && saved.contains("      - app-data:/data\n"),
+            "{saved}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join("compose.yml.bak")).unwrap(),
+            text
+        );
+
+        let down = run_once(&runner, &target, "down").await.expect("down");
+        assert_eq!(down.code, Some(0), "{down:?}");
+        for v in [&named, &old] {
+            let _ = docker
+                .remove_volume(v, None::<bollard::query_parameters::RemoveVolumeOptions>)
+                .await;
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]

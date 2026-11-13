@@ -1,11 +1,13 @@
 // Names a project's unnamed volumes in its compose files: a key and name per
 // volume (editable, checked in Rust against the files and the engine), the
 // revised files as diffs, and Copy / Save as / Save in place (with a .bak).
+// Save and move data also copies what the containers hold into the named
+// volumes (the section runs it in the Run dialog).
 // Anything the editor can't change safely is listed with a snippet to add
 // by hand.
 import { useEffect, useState } from "react";
 import { appApi } from "../../api/app";
-import { composeApi, type ComposeTarget, type NameRequest, type Revision, type UnnamedVolume } from "../../api/compose";
+import { composeApi, type ComposeTarget, type MoveRequest, type NameRequest, type Revision, type SaveFile, type UnnamedVolume } from "../../api/compose";
 import { toAppError, type AppError } from "../../api/core";
 import { DiffView } from "../../components/DiffView";
 import { DialogHelp } from "../../components/HelpDialog";
@@ -22,12 +24,14 @@ interface Props {
   shell: Shell;
   /** After Save in place (the files changed). */
   onSaved: () => void;
+  /** Save and move data: the section saves, stops, copies and brings it up. */
+  onMove: (files: SaveFile[], moves: MoveRequest[]) => void;
   onClose: () => void;
 }
 
 type Preview = { key: string; revision: Revision | null; error: AppError | null };
 
-export function NameVolumesDialog({ project, target, findings, shown, shell, onSaved, onClose }: Props) {
+export function NameVolumesDialog({ project, target, findings, shown, shell, onSaved, onMove, onClose }: Props) {
   const [rows, setRows] = useState(() => findings.map((f) => ({ on: true, key: f.key, name: f.name })));
   const [preview, setPreview] = useState<Preview | null>(null);
   const [tab, setTab] = useState(0);
@@ -63,6 +67,10 @@ export function NameVolumesDialog({ project, target, findings, shown, shell, onS
     return at < 0 ? undefined : rev?.issues.find((x) => x.index === at && x.field === field)?.message;
   };
   const ready = !!rev && rev.issues.length === 0 && changed.length > 0 && !saving;
+  // Data can move for ticked volumes a container holds now that the files name.
+  const movable = rev
+    ? picked.filter(({ f }) => f.current.length > 0 && !rev.manual.some((m) => m.service === f.service && m.target === f.target))
+    : [];
 
   const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
@@ -78,8 +86,8 @@ export function NameVolumesDialog({ project, target, findings, shown, shell, onS
     }
   }
 
-  async function saveInPlace() {
-    if (!ready) return;
+  /** Asks before replacing older .bak files; false if not. */
+  async function backupsOk() {
     const old = changed.filter((f) => f.backupExists);
     if (old.length > 0) {
       const ok = await shell.ask(
@@ -91,8 +99,42 @@ export function NameVolumesDialog({ project, target, findings, shown, shell, onS
         [{ label: "Replace and save", value: "yes", primary: true }, { label: "Cancel", value: "no" }],
         "no",
       );
-      if (ok !== "yes") return;
+      if (ok !== "yes") return false;
     }
+    return true;
+  }
+
+  async function saveAndMove() {
+    if (!ready || movable.length === 0 || !(await backupsOk())) return;
+    const more = movable.filter(({ f }) => f.current.length > 1);
+    const ok = await shell.ask(
+      "Save and move data",
+      <>
+        <p>
+          This saves the compose {changed.length === 1 ? "file" : "files"} (keeping a .bak), stops {project}, copies what{" "}
+          {movable.length === 1 ? "this unnamed volume holds into its named volume" : `these ${movable.length} unnamed volumes hold into their named volumes`}, then
+          brings {project} up on them.
+        </p>
+        {more.length > 0 && (
+          <p className="warn-note">
+            {more.map(({ f }) => `${f.service} ${f.target}`).join(", ")}: several containers hold their own volume there. Only {more[0].f.current[0].container}'s is copied, and the
+            containers will share the named one.
+          </p>
+        )}
+        <p>The old volumes are kept, so nothing is lost if a step fails. Prune removes them later.</p>
+      </>,
+      [{ label: "Save and move", value: "yes", primary: true }, { label: "Cancel", value: "no" }],
+      "no",
+    );
+    if (ok !== "yes") return;
+    onMove(
+      changed.map((f) => ({ path: f.path, original: f.original, revised: f.revised, replaceBackup: f.backupExists })),
+      movable.map(({ f, r }) => ({ from: f.current[0].volume, key: r.key.trim(), name: r.name.trim() })),
+    );
+  }
+
+  async function saveInPlace() {
+    if (!ready || !(await backupsOk())) return;
     setSaving(true);
     let saved = 0;
     try {
@@ -215,6 +257,11 @@ export function NameVolumesDialog({ project, target, findings, shown, shell, onS
             Save as…
           </button>
           <div className="spacer" />
+          {movable.length > 0 && (
+            <button className="btn" disabled={!ready} onClick={() => void saveAndMove()} title="Save, stop the project, copy the data into the named volumes, then bring it up">
+              Save and move data…
+            </button>
+          )}
           <button className="btn primary" disabled={!ready} onClick={() => void saveInPlace()} title="Copies each file to .bak, then saves the revised one in its place">
             {saving ? "Saving…" : "Save in place"}
           </button>

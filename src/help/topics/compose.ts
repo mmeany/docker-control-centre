@@ -99,16 +99,21 @@ The change goes in the file that already lists the service's volumes, else the f
 | Copy | Copies the revised file shown |
 | Save as… | Saves the revised file somewhere else |
 | Save in place | Copies each file to \`<file>.bak\`, then saves the revised one in its place. It refuses if the file changed since the dialog read it |
+| Save and move data… | Saves in place, then stops the project, copies what the containers hold into the named volumes and brings it up. Shown when a ticked volume is held by a container now |
 
 Some files can't be changed safely: flow style (\`[...]\`), anchors, aliases or \`<<:\` merges on the service, \`extends\`, or volume entries written with variables. Those volumes are listed with a snippet to add by hand.
 
-After saving, the project still runs on the old unnamed volumes until it's recreated. Up makes new, empty named volumes: the data in the old ones isn't copied.`,
+After Save in place, the project still runs on the old unnamed volumes until it's recreated, and Up then makes new, empty named volumes: the data isn't copied. Use **Save and move data…** to keep it.
+
+Moving data makes each named volume with compose's own labels, then a small busybox container (pulled if it isn't there) copies the old volume into it as root, keeping owners and permissions. A named volume that already holds data isn't copied into. If several containers of a service each hold their own volume, only the first one's is copied.
+
+The old volumes are never deleted. Afterwards nothing mounts them, so they show as orphaned and Prune can remove them once you've checked the project. If a step fails, the steps after it don't run, and the output says what's done.`,
   },
   "compose.run": {
     title: "Compose output",
     body: `Compose's output for the command, as it runs. Compose writes its progress to stderr, so only lines that mention an error are shown as errors.
 
-- **Stop** while it's running cancels the command. What compose already did stays done.
+- **Stop** while it's running cancels the command. What compose already did stays done. Moving volume data can't be stopped halfway: wait for it to finish.
 - **Close** when it's finished. After an up from a dropped file, closing opens the project.
 
 If it fails, the last lines usually say why: a port already in use, an image that can't be pulled, or a path that doesn't exist where compose runs (check **Settings**: inside WSL, Windows paths become \`/mnt/<drive>/…\`).`,

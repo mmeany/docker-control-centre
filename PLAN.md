@@ -538,7 +538,7 @@ bring the project back up on the named volumes.
   and `compose_save_revision` (backup, atomic write, changed-since-read
   check). UI: Name volumes dialog (editable names, per-file diff tabs, Copy /
   Save as / Save in place).
-- 15.4 Move data: commands to create labelled volumes and run the helper
+- 15.4 ✅ Move data: commands to create labelled volumes and run the helper
   copy (bollard: create, start, wait, exit code, remove); the stop / copy /
   up sequence in the Run dialog; integration test (`--features
   integration`): a postgres-style project with an image VOLUME, revise, move,
