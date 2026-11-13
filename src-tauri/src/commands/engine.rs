@@ -27,7 +27,40 @@ pub async fn list_containers(state: State<'_, AppState>) -> Result<Vec<Container
         .list_containers(Some(opts))
         .await
         .map_err(|x| e.error(x))?;
-    Ok(list.into_iter().map(engine::container_item).collect())
+    let mut items: Vec<ContainerItem> = list.into_iter().map(engine::container_item).collect();
+
+    // Containers that aren't running have no ports in the list: show what
+    // they're configured to publish. That never changes for a container id,
+    // so each is inspected once (a few at a time) and remembered.
+    let docker = e.docker()?;
+    let missing: Vec<String> = {
+        let cache = state.port_config.lock().unwrap();
+        items
+            .iter()
+            .filter(|c| engine::needs_configured_ports(c) && !cache.contains_key(&c.id))
+            .map(|c| c.id.clone())
+            .collect()
+    };
+    let fetched: Vec<(String, Vec<String>)> = futures_util::stream::iter(missing)
+        .map(|id| async move {
+            // Gone meanwhile, or the engine refused: try again on the next list.
+            let r = docker.inspect_container(&id, None).await.ok()?;
+            Some((id, engine::configured_ports(&r)))
+        })
+        .buffer_unordered(8)
+        .filter_map(|x| async move { x })
+        .collect()
+        .await;
+    let mut cache = state.port_config.lock().unwrap();
+    cache.extend(fetched);
+    cache.retain(|id, _| items.iter().any(|c| &c.id == id));
+    for c in items
+        .iter_mut()
+        .filter(|c| engine::needs_configured_ports(c))
+    {
+        c.configured_ports = cache.get(&c.id).cloned().unwrap_or_default();
+    }
+    Ok(items)
 }
 
 /// Starts (or restarts) this window's change feed. Runs until the app exits or the UI

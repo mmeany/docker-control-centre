@@ -142,6 +142,9 @@ pub struct ContainerDetails {
     pub labels: Vec<KeyValue>,
     pub mounts: Vec<MountInfo>,
     pub ports: Vec<PortInfo>,
+    /// The ports' hosts come from the configuration (it isn't running, so
+    /// nothing is published now): what it publishes when it starts.
+    pub ports_configured: bool,
     pub networks: Vec<NetworkInfo>,
 }
 
@@ -221,11 +224,15 @@ fn port_infos(
                 .host_ip
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "0.0.0.0".into());
-            let host = b.host_port.unwrap_or_default();
-            let s = if ip.contains(':') {
-                format!("[{ip}]:{host}")
+            let ip = if ip.contains(':') {
+                format!("[{ip}]")
             } else {
-                format!("{ip}:{host}")
+                ip
+            };
+            // No host port in a configured binding: the engine picks one at start.
+            let s = match b.host_port.filter(|p| !p.is_empty()) {
+                Some(host) => format!("{ip}:{host}"),
+                None => format!("{ip}, any free port"),
             };
             if !hosts.contains(&s) {
                 hosts.push(s);
@@ -273,6 +280,16 @@ pub fn container_details(c: ContainerInspectResponse) -> ContainerDetails {
     let state = c.state.unwrap_or_default();
     let host = c.host_config.unwrap_or_default();
     let net = c.network_settings.unwrap_or_default();
+    // Published ports exist only while it runs; otherwise show the bindings it
+    // will publish (the same thing the lists show, dimmed).
+    let live = net.ports.clone().unwrap_or_default();
+    let has_live = live
+        .values()
+        .any(|b| b.as_ref().is_some_and(|v| !v.is_empty()));
+    let up = state.running == Some(true) || state.paused == Some(true);
+    let configured = host.port_bindings.clone().unwrap_or_default();
+    let ports_configured = !has_live && !up && !configured.is_empty();
+    let published = if ports_configured { configured } else { live };
     let labels = config.labels.clone().unwrap_or_default();
     let label = |k: &str| labels.get(k).filter(|v| !v.is_empty()).cloned();
 
@@ -338,10 +355,8 @@ pub fn container_details(c: ContainerInspectResponse) -> ContainerDetails {
             .into_iter()
             .map(mount_info)
             .collect(),
-        ports: port_infos(
-            net.ports.unwrap_or_default(),
-            config.exposed_ports.clone().unwrap_or_default(),
-        ),
+        ports: port_infos(published, config.exposed_ports.clone().unwrap_or_default()),
+        ports_configured,
         networks,
         id,
     }
@@ -480,10 +495,56 @@ mod tests {
                 },
             ]
         );
+        assert!(!d.ports_configured, "live bindings win");
         assert_eq!(d.networks[0].ip_address, "172.18.0.2/16");
         assert_eq!(d.networks[0].aliases, vec!["shop-web-1", "web"]);
         assert_eq!(d.mounts[0].kind, "bind");
         assert!(!d.mounts[0].read_write);
+    }
+
+    #[test]
+    fn stopped_container_shows_configured_ports() {
+        let c = ContainerInspectResponse {
+            config: Some(ContainerConfig {
+                exposed_ports: Some(vec!["21/tcp".into(), "9000/tcp".into()]),
+                ..Default::default()
+            }),
+            host_config: Some(HostConfig {
+                port_bindings: Some(HashMap::from([
+                    (
+                        "21/tcp".to_string(),
+                        Some(vec![PortBinding {
+                            host_ip: Some(String::new()),
+                            host_port: Some("2121".into()),
+                        }]),
+                    ),
+                    (
+                        "9000/tcp".to_string(),
+                        Some(vec![PortBinding {
+                            host_ip: Some("127.0.0.1".into()),
+                            host_port: Some(String::new()),
+                        }]),
+                    ),
+                ])),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let d = container_details(c);
+        assert!(d.ports_configured);
+        assert_eq!(
+            d.ports,
+            vec![
+                PortInfo {
+                    container_port: "21/tcp".into(),
+                    host: vec!["0.0.0.0:2121".into()]
+                },
+                PortInfo {
+                    container_port: "9000/tcp".into(),
+                    host: vec!["127.0.0.1, any free port".into()]
+                },
+            ]
+        );
     }
 
     #[test]
@@ -496,6 +557,7 @@ mod tests {
         assert_eq!(d.restart_policy, "no");
         assert_eq!(d.health, "");
         assert!(d.env.is_empty() && d.ports.is_empty() && d.networks.is_empty());
+        assert!(!d.ports_configured);
     }
 }
 

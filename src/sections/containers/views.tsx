@@ -8,6 +8,7 @@ import { StatusMark } from "../../components/StatusMark";
 import { containerStatus, projectStatus } from "../../status/status";
 import { formatDate } from "../../format";
 import type { ChildId } from "./paths";
+import { portsText } from "./ports";
 
 /** Environment variables whose values are hidden until revealed. */
 const SECRET = /pass|secret|token|key|credential|private|auth/i;
@@ -75,11 +76,14 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
       break;
     case "ports":
       body = (
-        <Table
-          head={["Container port", "Published on"]}
-          rows={d.ports.map((p) => [p.containerPort, p.host.length ? p.host.join(", ") : "Not published"])}
-          empty="No ports exposed or published."
-        />
+        <>
+          {d.portsConfigured && <p className="hint">Not running, so nothing is published now: these are published when it starts.</p>}
+          <Table
+            head={["Container port", d.portsConfigured ? "Published on when it starts" : "Published on"]}
+            rows={d.ports.map((p) => [p.containerPort, p.host.length ? p.host.join(", ") : "Not published"])}
+            empty="No ports exposed or published."
+          />
+        </>
       );
       break;
     case "networks":
@@ -136,7 +140,7 @@ export function ContainerPane({ item, details }: { item: ContainerItem; details:
           ["State", [item.state, d?.health, exit].filter(Boolean).join(" · ")],
           ["Image", item.image],
           ["Command", d?.command],
-          ["Ports", item.ports.join(", ")],
+          ["Ports", portsText(item)],
           ["Project", item.project && `${item.project}${item.service ? ` (service ${item.service})` : ""}`],
           ["Created", formatDate(item.created)],
           ["Started", d?.startedAt && formatDate(d.startedAt)],

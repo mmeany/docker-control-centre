@@ -39,6 +39,7 @@ import { StatsView } from "./StatsView";
 import { ContainerPane, InspectChild, INSPECT_CHILDREN, ProjectPane, SelectionPane } from "./views";
 import { attention, containerStatus, projectStatus } from "../../status/status";
 import { SectionBadge } from "../../components/SectionBadge";
+import { portsCell } from "./ports";
 
 /** xterm is big: load it the first time a terminal opens (its own chunk). */
 const TerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
@@ -310,7 +311,7 @@ export function useContainersSection(shell: Shell): SectionUi {
         state: { text: containerStatus(c).label, sort: STATE_ORDER[c.state] ?? 9 },
         image: { text: c.image, sort: c.image },
         status: { text: c.status, sort: c.status },
-        ports: { text: c.ports.join(", "), sort: c.ports.join(",") },
+        ports: portsCell(c),
         created: { text: formatDate(c.created), sort: c.created },
       },
     };

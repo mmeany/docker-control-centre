@@ -30,7 +30,10 @@ export interface ContainerItem {
   health: "" | "starting" | "healthy" | "unhealthy";
   /** ISO 8601 UTC. */
   created: string;
+  /** What's published now ("8080→80/tcp"); empty unless running. */
   ports: string[];
+  /** Not running: what it publishes when it starts (from its configuration). */
+  configuredPorts: string[];
   project: string | null;
   service: string | null;
   workingDir: string | null;
@@ -107,6 +110,8 @@ export interface ContainerDetails {
   labels: KeyValue[];
   mounts: MountInfo[];
   ports: PortInfo[];
+  /** Not running: `ports` hosts are what it publishes when it starts. */
+  portsConfigured: boolean;
   networks: NetworkInfo[];
 }
 
