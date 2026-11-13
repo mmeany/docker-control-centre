@@ -7,6 +7,7 @@ import type { AppError, Settings } from "../api/core";
 import { composeApi, COMPOSE_DISTRO_KEY, COMPOSE_MODE_KEY, type ComposeOutput, type Distro } from "../api/compose";
 import { LAYOUT_KEY, LAYOUTS, readLayout, type Layout } from "../shell/layout";
 import { DialogHelp } from "../components/HelpDialog";
+import { anyColumnLayouts, resetAllColumnLayouts } from "../state/columns";
 
 interface Props {
   settings: Settings;
@@ -21,6 +22,20 @@ export function SettingsDialog({ settings, onSaved, onClose }: Props) {
   const [distros, setDistros] = useState<Distro[] | null>(null);
   const [test, setTest] = useState<{ busy: boolean; out: ComposeOutput | null; error: string | null }>({ busy: false, out: null, error: null });
   const [saving, setSaving] = useState(false);
+  // Reset all column layouts: asks in place, then says when it's done.
+  const [columnsReset, setColumnsReset] = useState<"idle" | "asking" | "done">("idle");
+  const hasColumnLayouts = anyColumnLayouts(settings.values);
+
+  async function resetColumns() {
+    try {
+      const s = await resetAllColumnLayouts(settings.values);
+      if (s) onSaved(s);
+      setColumnsReset("done");
+    } catch (e) {
+      setColumnsReset("idle");
+      setTest({ busy: false, out: null, error: (e as AppError).message });
+    }
+  }
 
   useEffect(() => {
     composeApi
@@ -110,6 +125,33 @@ export function SettingsDialog({ settings, onSaved, onClose }: Props) {
           {test.out && (
             <pre className={ok ? "ok-note" : "warn-note"}>{(test.out.stdout + test.out.stderr).trim() || `Exit code ${test.out.code}`}</pre>
           )}
+          <fieldset className="radio-group">
+            <legend>Columns</legend>
+            {columnsReset === "asking" ? (
+              <div className="warn-note settings-columns">
+                <span>Every list and table goes back to its default column widths, and hidden columns show again. This can't be undone.</span>
+                <button className="btn danger" onClick={() => void resetColumns()}>
+                  Reset
+                </button>
+                <button className="btn" onClick={() => setColumnsReset("idle")}>
+                  Keep
+                </button>
+              </div>
+            ) : (
+              <div className="settings-test">
+                <button className="btn" onClick={() => setColumnsReset("asking")} disabled={columnsReset === "done" || !hasColumnLayouts}>
+                  Reset all column layouts…
+                </button>
+                <span className="hint">
+                  {columnsReset === "done"
+                    ? "Every list and table is back to its default columns."
+                    : hasColumnLayouts
+                      ? "Column widths and hidden columns in every list and table."
+                      : "No list or table has changed columns."}
+                </span>
+              </div>
+            )}
+          </fieldset>
         </div>
         <div className="dialog-buttons">
           <div className="spacer" />

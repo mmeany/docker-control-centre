@@ -122,6 +122,7 @@ The totals only run while the overview is open. Choose a section in the side pan
 - **Run docker compose:** *Inside WSL* for Docker Engine running in WSL, so bind-mount paths resolve on the Linux side. Windows paths are converted (\`E:\\projects\\shop\` becomes \`/mnt/e/projects/shop\`). *On this computer* runs \`docker compose\` directly, for Docker Desktop.
 - **WSL distro:** which distro compose runs in; *Default* is WSL's default distro. Folders inside another distro can't be used from this one.
 - **Test** saves, then runs \`docker compose version\` the way projects will run, so you can see it works.
+- **Reset all column layouts** puts every list and table back to its default column widths and shows hidden columns again. It asks first, and happens straight away (not on Save).
 
 Settings are saved in \`%APPDATA%\\com.mmeany.dockercontrolcentre\\settings.json\`. Nothing secret is stored there.`,
   },

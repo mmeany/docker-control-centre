@@ -8,6 +8,7 @@
 // `appApi.setValue` when a drag ends.
 import { useCallback, useId, useSyncExternalStore } from "react";
 import { appApi } from "../api/app";
+import type { Settings } from "../api/core";
 
 /** Narrowest a column can be dragged. */
 export const MIN_COL_W = 40;
@@ -79,6 +80,28 @@ export function seedColumnLayouts(values: Record<string, unknown>) {
   notify();
 }
 
+/** Whether any list or table has changed columns (saved, or changed in this window). */
+export function anyColumnLayouts(stored: Record<string, unknown>): boolean {
+  if (Object.keys(stored).some((k) => k.startsWith(COLUMNS_PREFIX))) return true;
+  return Object.entries(layouts).some(([k, l]) => !k.startsWith("local:") && (Object.keys(l.widths).length > 0 || l.hidden.length > 0));
+}
+
+/**
+ * Settings › Reset all column layouts: every list and table back to its
+ * default widths and columns, now and in settings. `stored` is the settings
+ * values, for layouts saved by another window that this one never loaded.
+ * Returns the settings after the last removal (null if there was nothing).
+ */
+export async function resetAllColumnLayouts(stored: Record<string, unknown>): Promise<Settings | null> {
+  const keys = new Set(Object.keys(stored).filter((k) => k.startsWith(COLUMNS_PREFIX)));
+  for (const k of Object.keys(layouts)) if (!k.startsWith("local:")) keys.add(COLUMNS_PREFIX + k);
+  layouts = {};
+  notify();
+  let last: Settings | null = null;
+  for (const k of keys) last = await appApi.setValue(k, null);
+  return last;
+}
+
 function subscribe(l: () => void) {
   listeners.add(l);
   return () => {
@@ -111,6 +134,17 @@ export function useColumnLayout(key: string | undefined, ids: string[]) {
     [k, key, idsKey],
   );
 
+  /** Sets several widths at once (a table freezing its auto widths); `persist` as for setWidth. */
+  const setWidths = useCallback(
+    (widths: Record<string, number>, persist = true) => {
+      const cur = layouts[k] ?? EMPTY;
+      const next = { ...cur.widths };
+      for (const [id, w] of Object.entries(widths)) next[id] = clampWidth(w);
+      put(k, { ...cur, widths: next }, idsKey.split("\n"), persist, key !== undefined);
+    },
+    [k, key, idsKey],
+  );
+
   /** Shows or hides one column (never the first). */
   const toggleHidden = useCallback(
     (id: string) => {
@@ -135,6 +169,7 @@ export function useColumnLayout(key: string | undefined, ids: string[]) {
   return {
     layout,
     setWidth,
+    setWidths,
     toggleHidden,
     resetWidths,
     resetAll,

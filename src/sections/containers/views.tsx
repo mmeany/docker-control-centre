@@ -9,21 +9,16 @@ import { containerStatus, projectStatus } from "../../status/status";
 import { formatDate } from "../../format";
 import type { ChildId } from "./paths";
 import { portsText } from "./ports";
+import { ResizableTable } from "../../components/ResizableTable";
 
 /** Environment variables whose values are hidden until revealed. */
 const SECRET = /pass|secret|token|key|credential|private|auth/i;
 
-function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; empty: string }) {
+/** An inspect table; `head` is [column id, heading], ids staying put when headings change. */
+function Table({ tableKey, head, rows, empty }: { tableKey: string; head: [string, string][]; rows: ReactNode[][]; empty: string }) {
   if (rows.length === 0) return <div className="empty-note">{empty}</div>;
   return (
-    <table className="data-table">
-      <thead>
-        <tr>
-          {head.map((h) => (
-            <th key={h}>{h}</th>
-          ))}
-        </tr>
-      </thead>
+    <ResizableTable tableKey={tableKey} columns={head.map(([id, label]) => ({ id, label }))}>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
@@ -35,7 +30,7 @@ function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; emp
           </tr>
         ))}
       </tbody>
-    </table>
+    </ResizableTable>
   );
 }
 
@@ -60,15 +55,16 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
   let body: ReactNode;
   switch (child) {
     case "env":
-      body = <Table head={["Name", "Value"]} rows={pairs(d.env, true, onError, onCopied)} empty="No environment variables." />;
+      body = <Table tableKey="env" head={[["name", "Name"], ["value", "Value"]]} rows={pairs(d.env, true, onError, onCopied)} empty="No environment variables." />;
       break;
     case "labels":
-      body = <Table head={["Label", "Value"]} rows={pairs(d.labels, false, onError, onCopied)} empty="No labels." />;
+      body = <Table tableKey="labels" head={[["label", "Label"], ["value", "Value"]]} rows={pairs(d.labels, false, onError, onCopied)} empty="No labels." />;
       break;
     case "mounts":
       body = (
         <Table
-          head={["Type", "Source", "Destination", "Access"]}
+          tableKey="mounts"
+          head={[["type", "Type"], ["source", "Source"], ["destination", "Destination"], ["access", "Access"]]}
           rows={d.mounts.map((m) => [m.kind, m.name || m.source, m.destination, m.readWrite ? "Read / write" : "Read only"])}
           empty="No volumes or bind mounts."
         />
@@ -79,7 +75,8 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
         <>
           {d.portsConfigured && <p className="hint">Not running, so nothing is published now: these are published when it starts.</p>}
           <Table
-            head={["Container port", d.portsConfigured ? "Published on when it starts" : "Published on"]}
+            tableKey="ports"
+            head={[["port", "Container port"], ["host", d.portsConfigured ? "Published on when it starts" : "Published on"]]}
             rows={d.ports.map((p) => [p.containerPort, p.host.length ? p.host.join(", ") : "Not published"])}
             empty="No ports exposed or published."
           />
@@ -89,7 +86,8 @@ export function InspectChild({ child, details: d, onError, onCopied }: ChildProp
     case "networks":
       body = (
         <Table
-          head={["Network", "IP address", "Gateway", "MAC address", "Aliases"]}
+          tableKey="networks"
+          head={[["network", "Network"], ["ip", "IP address"], ["gateway", "Gateway"], ["mac", "MAC address"], ["aliases", "Aliases"]]}
           rows={d.networks.map((n) => [n.name, n.ipAddress, n.gateway, n.macAddress, n.aliases.join(", ")])}
           empty="Not on any network."
         />
