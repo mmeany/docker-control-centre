@@ -381,9 +381,9 @@ Details in `PLAN.md`.)
    restart / pull, merged project logs, settings (WSL toggle, distro).
 6. ✅ Files inside containers: exec listing with archive fallback, copy in / out.
 7. ✅ Release: tag-triggered installer builds (draft release), version check,
-   app icon, README with screenshots, WSL setup guide, changelog. Repo still
-   private: `gh repo edit mmeany/docker-control-centre --visibility public
-   --accept-visibility-change-consequences` when ready.
+   app icon, README with screenshots, WSL setup guide, changelog. The repo is
+   public (since 0.6.0); a draft release is published with
+   `gh release edit v<x.y.z> --draft=false --latest`.
 8. ✅ Status colours (see PLAN.md, M8): running, idle, unused,
    orphaned, error marks and colours in the tree, lists, tabs and details
    pane; project roll-ups; "Orphaned (n)" folders; section badges; Help ›
