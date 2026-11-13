@@ -550,6 +550,14 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 /* ---------- Compose file ---------- */
 .unnamed-notes { padding: 8px 10px 2px; border-bottom: 1px solid var(--border-light); }
 .unnamed-notes p { margin: 0 0 6px; }
+.name-volumes-dialog .dialog-body { display: flex; flex-direction: column; gap: 8px; overflow: auto; flex: 1; min-height: 0; }
+.name-volumes-dialog .dialog-body > p { margin: 0; }
+.name-volumes-rows .text-input { width: 100%; min-width: 140px; }
+.name-volumes-rows .text-input.invalid { border-color: var(--danger); }
+.name-volumes-rows td { vertical-align: top; }
+.name-volumes-manual pre { margin: 4px 0 6px; padding: 6px 8px; background: var(--input-bg); border: 1px solid var(--border-light); user-select: text; overflow: auto; }
+.name-volumes-manual p { margin: 0; }
+.name-volumes-files { padding: 0; }
 .compose-file-view .filter-bar > .segmented, .compose-file-view .filter-bar > .btn { flex-shrink: 0; white-space: nowrap; }
 .compose-file-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); user-select: text; }
 .compose-file-view .segmented button { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -6,13 +6,13 @@
 // the window (anywhere but container Files) are confirmed, pinned and brought up.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appApi } from "../../api/app";
-import { composeApi, COMPOSE_DISTRO_KEY, type ComposeVerb, type DropGroup } from "../../api/compose";
+import { composeApi, COMPOSE_DISTRO_KEY, type ComposeTarget, type ComposeVerb, type DropGroup, type UnnamedVolume } from "../../api/compose";
 import { Board, type BoardAction } from "../../components/Board";
 import { CommandButton, CommandSeparator } from "../../components/CommandButton";
 import type { MenuItem } from "../../components/ContextMenu";
 import { ErrorPanel } from "../../components/ErrorPanel";
 import { FileList, type Column, type Row } from "../../components/FileList";
-import { ContainerIcon, DeleteIcon, FileIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon, VolumeIcon } from "../../components/Icons";
+import { ContainerIcon, DeleteIcon, EditIcon, FileIcon, DownloadIcon, LogsIcon, NewItemIcon, PlayIcon, ProjectIcon, RefreshIcon, RestartIcon, StopIcon, VolumeIcon } from "../../components/Icons";
 import { TreeMore, TreeNote, TreeRow } from "../../components/TreeRow";
 import { partition } from "../../status/filter";
 import type { SectionUi, Shell } from "../../shell/shell";
@@ -21,6 +21,7 @@ import { containerPath } from "../containers/paths";
 import { LogsView } from "../containers/LogsView";
 import { ComposeFileView } from "./ComposeFileView";
 import { DropComposeDialog } from "./DropComposeDialog";
+import { NameVolumesDialog } from "./NameVolumesDialog";
 import { fileName, parentDir, pinnedLabel, projectsFrom, projectState, targetOf, windowsPath, type Project } from "./projects";
 import { RunDialog } from "./RunDialog";
 import { attention, containerStatus, projectStatus } from "../../status/status";
@@ -103,6 +104,8 @@ export function useComposeSection(shell: Shell): SectionUi {
    * dropped folders that can't be used were left out (shown in the first).
    */
   const [drops, setDrops] = useState<{ groups: DropGroup[]; at: number; skipped: string[] } | null>(null);
+  /** The Name volumes dialog: the project's files and findings when it opened. */
+  const [naming, setNaming] = useState<{ project: string; target: ComposeTarget; findings: UnnamedVolume[] } | null>(null);
   /** A confirmed drop is being pinned: its up hasn't started yet. */
   const [pinning, setPinning] = useState(false);
   const [selection, setSelection] = useState({ path: "", keys: new Set<string>() });
@@ -326,6 +329,12 @@ export function useComposeSection(shell: Shell): SectionUi {
 
   // Unnamed volumes: open the volume a container holds, or the container.
   const findingOf = (key: string) => unnamed.data?.findings.find((f) => unnamedKey(f) === key);
+  // Naming them edits files: main window only, like the project's other actions.
+  const canName = !!shell.popOut && !!current && !!unnamed.data?.findings.length;
+  function openNaming() {
+    if (!canName || !current || !unnamed.data) return;
+    setNaming({ project: current.name, target: targetOf(current), findings: unnamed.data.findings });
+  }
   function openUnnamed(key: string) {
     const v = findingOf(key)?.current[0];
     if (v) shell.navigate({ section: "volumes", path: v.volume });
@@ -344,6 +353,7 @@ export function useComposeSection(shell: Shell): SectionUi {
         "separator",
       );
     }
+    if (shell.popOut) menu.push({ label: "Name volumes…", disabled: !canName, onClick: openNaming });
     menu.push({ label: "Refresh", shortcut: "F5", onClick: refresh });
     shell.openMenu(x, y, menu);
   }
@@ -390,6 +400,9 @@ export function useComposeSection(shell: Shell): SectionUi {
       <CommandButton icon={<LogsIcon />} label="Logs" title="Every service's logs, merged" disabled={!target || target.containers.length === 0} onClick={() => target && go(`${target.name}/logs`)} />
       <CommandButton icon={<FileIcon />} label="File" title="The project's compose files, and the resolved config" disabled={!target} onClick={() => target && go(`${target.name}/file`)} />
       <CommandButton icon={<VolumeIcon />} label="Unnamed" title="Volumes Docker makes for the project with no name" disabled={!target} onClick={() => target && go(`${target.name}/volumes`)} />
+      {child === "volumes" && shell.popOut && (
+        <CommandButton icon={<EditIcon />} label="Name volumes…" title="Name these volumes in the compose files" disabled={!canName} onClick={openNaming} />
+      )}
       <CommandButton icon={<NewItemIcon />} label="Pin file…" title="Pin a compose file so its project shows while it's down" onClick={() => void pin()} />
       <CommandSeparator />
       <CommandButton icon={<RefreshIcon />} label="Refresh" title="Refresh (F5)" onClick={refresh} />
@@ -607,6 +620,19 @@ export function useComposeSection(shell: Shell): SectionUi {
         if (ok && r.openAfter) go(r.project.name);
         refresh();
       }}
+    />
+  ) : naming ? (
+    <NameVolumesDialog
+      project={naming.project}
+      target={naming.target}
+      findings={naming.findings}
+      shown={shown}
+      shell={shell}
+      onSaved={() => {
+        setNaming(null);
+        refresh();
+      }}
+      onClose={() => setNaming(null)}
     />
   ) : drops && !pinning ? (
     <DropComposeDialog

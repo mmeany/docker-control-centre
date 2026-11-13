@@ -108,7 +108,8 @@ src/sections/volumes/anonymous.ts  anonymous volume labels (who mounts it) and c
 src/sections/compose/       projects.ts (running + pinned, targets, paths; unit-tested),
                             RunDialog (streamed output), ComposeFileView (files + resolved),
                             DropComposeDialog (dropped files: ticks, name, clash),
-                            unnamedVolumes (the /volumes child: load, rows, notes), the section
+                            unnamedVolumes (the /volumes child: load, rows, notes),
+                            NameVolumesDialog (keys / names, diffs, save in place), the section
 src/settings/SettingsDialog.tsx  compose in WSL or on the host, distro picker, test
 src/status/                 status.ts: one state model for containers, projects, images,
                             volumes, networks (unit-tested); LegendDialog
@@ -165,7 +166,10 @@ src-tauri/src/container_files.rs  list (exec sh script, archive fallback), copy 
 src-tauri/src/commands/files.rs   list_container_dir, copy_from_container, copy_into_container
 src-tauri/src/compose.rs    Runner, path conversion, distros, command lines, verbs (unit-tested)
 src-tauri/src/commands/compose.rs  run (streamed), check, distros, pin / unpin, read / show
-                            compose files, save_text_file
+                            compose files, save_text_file, unnamed volumes, name volumes
+                            (preview) and save a revision (.bak, atomic, changed-since check)
+src-tauri/src/compose_edit.rs  names volumes in compose files as a text edit (no YAML crate:
+                            block style only, refusals with snippets), key / name checks (unit-tested)
 src-tauri/src/resources.rs  image / volume / network DTOs, reference parsing, pull progress
 src-tauri/src/volume_audit.rs  unnamed volumes: causes, a project's findings from compose
                             config + image VOLUMEs + containers, proposed names (unit-tested)
@@ -404,4 +408,4 @@ Details in `PLAN.md`.)
     `/compose/<project>/volumes` view; a revised compose file naming them
     (diff, Copy / Save as / Save in place with `.bak`); optionally move
     their data into the named volumes and bring the project up.
-    15.1 ✅ find and show, 15.2 ✅ project view, 15.3 revise, 15.4 move data.
+    15.1 ✅ find and show, 15.2 ✅ project view, 15.3 ✅ revise, 15.4 move data.

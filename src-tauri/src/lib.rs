@@ -3,6 +3,7 @@
 
 mod commands;
 mod compose;
+mod compose_edit;
 mod container_files;
 mod containers;
 mod engine;
@@ -80,6 +81,8 @@ pub fn run() {
             commands::compose::compose_read_file,
             commands::compose::compose_show_file,
             commands::compose::compose_unnamed_volumes,
+            commands::compose::compose_name_volumes,
+            commands::compose::compose_save_revision,
             commands::compose::save_text_file,
             commands::resources::list_images,
             commands::resources::inspect_image,

@@ -33,7 +33,7 @@ const PLACES: Place[] = [
 ];
 
 /** Topics that belong to dialogs, not places. */
-const DIALOG_TOPICS: HelpTopicId[] = ["settings", "compose.run", "compose.drop", "images.pull"];
+const DIALOG_TOPICS: HelpTopicId[] = ["settings", "compose.run", "compose.drop", "compose.name", "images.pull"];
 
 describe("placeTopic", () => {
   it("gives every place a topic in both layouts", () => {

@@ -3,12 +3,13 @@
 
 use super::AppState;
 use crate::compose::{self, Candidate, Distro, Pinned, Runner, Target};
+use crate::compose_edit::{self, Issue, Manual, NameRequest};
 use crate::engine::map_error;
 use crate::error::{AppError, ErrorKind};
 use crate::volume_audit::{self, ImageVolumes, LiveMount, ProjectSpec, UnnamedVolumes};
 use bollard::query_parameters::ListContainersOptionsBuilder;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::process::Stdio;
 use tauri::ipc::Channel;
 use tauri::{Manager, State, Window};
@@ -520,9 +521,6 @@ pub async fn save_text_file(path: String, text: String) -> Result<(), AppError> 
         .map_err(|e| AppError::io(e, &path))
 }
 
-/// Against a real engine through WSL (`cargo test --features integration`):
-/// a project in a Windows temp folder with a bind mount comes up with the
-/// mount resolved on the Linux side, then goes down again.
 /// The project's unnamed volumes: what compose's config and the images say,
 /// plus what its containers hold now. The resolved config can hold secrets:
 /// only services, images and volume targets are read from it.
@@ -626,6 +624,137 @@ async fn read_spec(state: &AppState, target: &Target) -> Result<ProjectSpec, App
     ))
 }
 
+/// One compose file before and after naming its volumes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileRevision {
+    pub path: String,
+    pub original: String,
+    pub revised: String,
+    pub changed: bool,
+    /// `<path>.bak` is already there (saving in place replaces it).
+    pub backup_exists: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Revision {
+    pub files: Vec<FileRevision>,
+    pub manual: Vec<Manual>,
+    pub issues: Vec<Issue>,
+}
+
+/// Reads a compose file as text, within the size cap.
+async fn read_text(local: &str) -> Result<String, AppError> {
+    let meta = tokio::fs::metadata(local)
+        .await
+        .map_err(|e| AppError::io(e, local))?;
+    if meta.len() > compose::MAX_FILE_BYTES {
+        return Err(AppError::invalid(format!(
+            "{local} is over {} KB.",
+            compose::MAX_FILE_BYTES / 1024
+        )));
+    }
+    let bytes = tokio::fs::read(local)
+        .await
+        .map_err(|e| AppError::io(e, local))?;
+    String::from_utf8(bytes).map_err(|_| AppError::invalid(format!("{local} isn't UTF-8 text.")))
+}
+
+/// The project's compose files with the given volumes named in them, and
+/// what's wrong with the keys and names. Nothing is written.
+#[tauri::command]
+pub async fn compose_name_volumes(
+    state: State<'_, AppState>,
+    target: Target,
+    volumes: Vec<NameRequest>,
+) -> Result<Revision, AppError> {
+    if target.files.is_empty() {
+        return Err(AppError::invalid(
+            "The project's compose files aren't known, so they can't be revised.",
+        ));
+    }
+    let runs_in = wsl_runs_in(&state).await;
+    let mut files = vec![];
+    for f in &target.files {
+        compose::check_distro(f, runs_in.as_deref())?;
+        let local = local_path(&state, f).await?;
+        let text = read_text(&local).await?;
+        files.push((local, text));
+    }
+    let e = &state.engine;
+    let existing: HashSet<String> = e
+        .docker()?
+        .list_volumes(None::<bollard::query_parameters::ListVolumesOptions>)
+        .await
+        .map_err(|x| e.error(x))?
+        .volumes
+        .unwrap_or_default()
+        .into_iter()
+        .map(|v| v.name)
+        .collect();
+    let issues = compose_edit::check(&volumes, &compose_edit::volume_keys(&files), &existing);
+    let (revised, manual) = compose_edit::revise(&files, &volumes);
+    let mut out = vec![];
+    for ((path, original), revised) in files.into_iter().zip(revised) {
+        let backup_exists = tokio::fs::metadata(format!("{path}.bak")).await.is_ok();
+        out.push(FileRevision {
+            changed: original != revised,
+            path,
+            original,
+            revised,
+            backup_exists,
+        });
+    }
+    Ok(Revision {
+        files: out,
+        manual,
+        issues,
+    })
+}
+
+/// Saves a revised compose file in place: refuses if it changed since it was
+/// read, copies it to `<path>.bak` (replacing an older one only when asked),
+/// then writes the new text beside it and renames it over the file.
+#[tauri::command]
+pub async fn compose_save_revision(
+    state: State<'_, AppState>,
+    path: String,
+    original: String,
+    revised: String,
+    replace_backup: bool,
+) -> Result<(), AppError> {
+    let local = local_path(&state, &path).await?;
+    if !compose::is_compose_file(&local) {
+        return Err(AppError::invalid(format!("{local} isn't a compose file.")));
+    }
+    let current = read_text(&local).await?;
+    if current != original {
+        return Err(AppError::invalid(format!(
+            "{local} changed since it was read. Open Name volumes again to revise it as it is now."
+        )));
+    }
+    let backup = format!("{local}.bak");
+    if !replace_backup && tokio::fs::metadata(&backup).await.is_ok() {
+        return Err(AppError::invalid(format!("{backup} already exists.")));
+    }
+    tokio::fs::write(&backup, &current)
+        .await
+        .map_err(|e| AppError::io(e, &backup))?;
+    let temp = format!("{local}.dcc-new");
+    tokio::fs::write(&temp, &revised)
+        .await
+        .map_err(|e| AppError::io(e, &temp))?;
+    if let Err(e) = tokio::fs::rename(&temp, &local).await {
+        let _ = tokio::fs::remove_file(&temp).await;
+        return Err(AppError::io(e, &local));
+    }
+    Ok(())
+}
+
+/// Against a real engine through WSL (`cargo test --features integration`):
+/// a project in a Windows temp folder with a bind mount comes up with the
+/// mount resolved on the Linux side, then goes down again.
 #[cfg(all(test, feature = "integration", windows))]
 mod integration {
     use super::*;

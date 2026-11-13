@@ -531,7 +531,7 @@ bring the project back up on the named volumes.
   marks, volumes list labels.
 - 15.2 ✅ Project view: `/compose/<project>/volumes` (paths, crumbs,
   `placeTopic`), FileList + board, details-pane count.
-- 15.3 Revise: Rust text editor over the raw file (`compose_edit.rs`,
+- 15.3 ✅ Revise: Rust text editor over the raw file (`compose_edit.rs`,
   well unit-tested: block lists, missing keys, long form, top-level
   `volumes:` present / absent, CRLF / LF kept, indent detection, every
   refusal case); commands `compose_name_volumes` (preview: revised texts)

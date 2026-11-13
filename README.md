@@ -29,7 +29,10 @@ navigation, a live overview and cards instead.
   and every service's logs merged in time order. Each project's Unnamed
   volumes lists the volumes Docker makes for it with no name (an image
   `VOLUME` nothing is mounted over, or `- /path` with no name), with what
-  each would be called once named. Each project's Compose
+  each would be called once named. Name volumes revises the compose
+  files to name them (a diff per file; Copy, Save as, or Save in place
+  with a `.bak`), keeping comments and layout, and gives a snippet for
+  anything it can't change safely. Each project's Compose
   file shows the files it was started from (read-only, one tab each, with
   Show in folder and Open in editor) and, on request, the resolved config.
   Drag a compose file, or a folder holding one, from Explorer onto the

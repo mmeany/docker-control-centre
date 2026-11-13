@@ -79,6 +79,32 @@ export interface UnnamedVolumes {
   configError: string | null;
 }
 
+/** A volume to name in the compose files. */
+export interface NameRequest {
+  service: string;
+  target: string;
+  key: string;
+  name: string;
+}
+
+/** One compose file before and after naming volumes in it. */
+export interface FileRevision {
+  path: string;
+  original: string;
+  revised: string;
+  changed: boolean;
+  /** `<path>.bak` is already there. */
+  backupExists: boolean;
+}
+
+export interface Revision {
+  files: FileRevision[];
+  /** Requests left to add by hand, with why and what to add. */
+  manual: { service: string; target: string; reason: string; snippet: string }[];
+  /** Problems with keys or names (index into the requests); saving waits on none. */
+  issues: { index: number; field: "key" | "name"; message: string }[];
+}
+
 /** Settings keys (values). */
 export const COMPOSE_MODE_KEY = "compose.mode";
 export const COMPOSE_DISTRO_KEY = "compose.distro";
@@ -100,6 +126,11 @@ export const composeApi = {
   resolved: (target: ComposeTarget) => call<ComposeOutput>("compose_check", { target, verb: "config-yaml" }),
   /** The project's anonymous volumes: from its config, its images' VOLUMEs and its containers. */
   unnamedVolumes: (target: ComposeTarget) => call<UnnamedVolumes>("compose_unnamed_volumes", { target }),
+  /** The project's files with these volumes named in them (nothing is written). */
+  nameVolumes: (target: ComposeTarget, volumes: NameRequest[]) => call<Revision>("compose_name_volumes", { target, volumes }),
+  /** Saves a revised file in place, after a `.bak`; refuses if it changed since `original`. */
+  saveRevision: (path: string, original: string, revised: string, replaceBackup: boolean) =>
+    call<void>("compose_save_revision", { path, original, revised, replaceBackup }),
   /** A project's compose file (an engine-side or Windows path), up to 1 MB. */
   readFile: (path: string) => call<ComposeFile>("compose_read_file", { path }),
   /** Shows the file in Explorer ("folder") or opens it in its default app ("open"). */
