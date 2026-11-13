@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { columnWidths, gridTemplate, useColumnLayout } from "../state/columns";
+import { columnWidths, gridTemplate, useColumnLayout, visibleColumns } from "../state/columns";
 import type { Status } from "../status/status";
 import { ContextMenu } from "./ContextMenu";
 import { StatusMark, statusTip } from "./StatusMark";
@@ -76,15 +76,20 @@ function contentWidth(el: HTMLElement | undefined): number {
 }
 
 /** Details-view list with sortable columns and Explorer-style selection. */
-export function FileList({ columns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details", columnsKey }: Props) {
-  const [sort, setSort] = useState<Sort>({ col: columns[0].id, dir: 1 });
+export function FileList({ columns: allColumns, rows, selected, onSelectionChange, onOpen, onContextMenu, onOrderChange, emptyText, view = "details", columnsKey }: Props) {
+  const [sort, setSort] = useState<Sort>({ col: allColumns[0].id, dir: 1 });
   const anchor = useRef<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const cols = useColumnLayout(
     columnsKey,
-    columns.map((c) => c.id),
+    allColumns.map((c) => c.id),
   );
+  // Hidden columns are left out everywhere: details, tiles' sub-lines, sorting.
+  const columns = visibleColumns(allColumns, cols.layout);
+  // Sorted by a column that's since been hidden: by the first (Name) instead.
+  const sortCol = columns.some((c) => c.id === sort.col) ? sort.col : columns[0].id;
+  const sortDir = sortCol === sort.col ? sort.dir : 1;
   const [headMenu, setHeadMenu] = useState<{ x: number; y: number } | null>(null);
   // Virtualisation: only rows near the viewport are in the DOM.
   const [scrollTop, setScrollTop] = useState(0);
@@ -108,16 +113,16 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
     const out = [...rows];
     out.sort((a, b) => {
       if (a.isContainer !== b.isContainer) return a.isContainer ? -1 : 1;
-      const av = a.cells[sort.col]?.sort ?? "";
-      const bv = b.cells[sort.col]?.sort ?? "";
+      const av = a.cells[sortCol]?.sort ?? "";
+      const bv = b.cells[sortCol]?.sort ?? "";
       const c =
         typeof av === "number" && typeof bv === "number"
           ? av - bv
           : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
-      return c * sort.dir;
+      return c * sortDir;
     });
     return out;
-  }, [rows, sort]);
+  }, [rows, sortCol, sortDir]);
 
   useEffect(() => onOrderChange?.(sorted.map((r) => r.key)), [sorted, onOrderChange]);
 
@@ -190,7 +195,7 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
   }
 
   function headerClick(col: string) {
-    setSort((s) => (s.col === col ? { col, dir: (s.dir * -1) as 1 | -1 } : { col, dir: 1 }));
+    setSort(sortCol === col ? { col, dir: (sortDir * -1) as 1 | -1 } : { col, dir: 1 });
   }
 
   const onBodyContextMenu = (e: MouseEvent) => {
@@ -309,7 +314,7 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
             <div key={c.id} className="fl-head-wrap" data-col={c.id}>
               <button className={`fl-head-cell ${c.align === "right" ? "right" : ""}`} onClick={() => headerClick(c.id)}>
                 {c.label}
-                {sort.col === c.id && <span className="sort-arrow">{sort.dir === 1 ? "▲" : "▼"}</span>}
+                {sortCol === c.id && <span className="sort-arrow">{sortDir === 1 ? "▲" : "▼"}</span>}
               </button>
               <span
                 className="fl-resize"
@@ -328,7 +333,18 @@ export function FileList({ columns, rows, selected, onSelectionChange, onOpen, o
         <ContextMenu
           x={headMenu.x}
           y={headMenu.y}
-          items={[{ label: "Reset column widths", onClick: cols.reset, disabled: !cols.hasCustom }]}
+          items={[
+            // A tick per column; the first (Name) is always shown.
+            ...allColumns.map((c, i) => ({
+              label: c.label,
+              checked: i === 0 || !cols.layout.hidden.includes(c.id),
+              disabled: i === 0,
+              onClick: () => cols.toggleHidden(c.id),
+            })),
+            "separator" as const,
+            { label: "Reset column widths", onClick: cols.resetWidths, disabled: !cols.hasWidths },
+            { label: "Reset columns", onClick: cols.resetAll, disabled: !cols.hasWidths && !cols.hasHidden },
+          ]}
           onClose={() => setHeadMenu(null)}
         />
       )}

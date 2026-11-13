@@ -5,6 +5,9 @@ module.exports = async (page, { shot }) => {
   await page.waitForSelector(".status-bar:has-text('ubuntu-dev · tcp://localhost:2375')");
   await page.click(".tree-row:has-text('Images')");
   await page.waitForSelector(".fl-row");
+  const rowNames = () => page.$$eval(".fl-row > :first-child .fl-name", (els) => els.map((e) => e.textContent));
+  // Sorted by Name, as the list opens (the section's own sort keys).
+  const byName = await rowNames();
 
   const headWidth = (label) =>
     page.$eval(`.fl-head-wrap[data-col='${label}']`, (el) => Math.round(el.getBoundingClientRect().width));
@@ -73,4 +76,44 @@ module.exports = async (page, { shot }) => {
   if ((await headWidth("name")) !== before) throw new Error("reset didn't restore Name");
   const cleared = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("get_settings").then((s) => s.values["columns.images"]));
   if (cleared !== undefined) throw new Error("reset didn't remove the value");
+
+  // Show / hide: the header menu has a tick per column; Name can't be unticked.
+  const value = () => page.evaluate(() => window.__TAURI_INTERNALS__.invoke("get_settings").then((s) => s.values["columns.images"]));
+  const headerMenu = async () => {
+    await page.click(".fl-head-wrap[data-col='name'] .fl-head-cell", { button: "right" });
+    await page.waitForSelector(".context-menu");
+  };
+  await headerMenu();
+  if (!(await page.locator(".cm-item[role=menuitemcheckbox]:has-text('Name')").isDisabled())) throw new Error("Name can be hidden");
+  if ((await page.locator(".cm-item:has-text('Image ID')").getAttribute("aria-checked")) !== "true") throw new Error("Image ID not ticked");
+  await shot("show-hide-menu");
+  await page.click(".cm-item:has-text('Image ID')");
+  await page.waitForSelector(".fl-head-wrap[data-col='id']", { state: "detached" });
+  if (await page.$(".fl-row:has-text('accfedff2102')")) throw new Error("hidden column still in rows");
+  if (JSON.stringify((await value())?.hidden) !== '["id"]') throw new Error(`hidden not remembered: ${JSON.stringify(await value())}`);
+
+  // Sorted by a column that's then hidden: sorts by Name.
+  await page.click(".fl-head-wrap[data-col='size'] .fl-head-cell");
+  await page.waitForSelector(".fl-head-wrap[data-col='size'] .sort-arrow");
+  await headerMenu();
+  await page.click(".cm-item:has-text('Size')");
+  await page.waitForSelector(".fl-head-wrap[data-col='name'] .sort-arrow");
+  const names = await rowNames();
+  if (JSON.stringify(names) !== JSON.stringify(byName)) throw new Error(`not sorted by name: ${names.join(", ")}`);
+  await shot("hidden");
+
+  // Tiles take their sub-lines from the visible columns: Created, not Image ID.
+  await page.click(".segmented button:has-text('Tiles')");
+  await page.waitForSelector(".fl-tiles .fl-item");
+  const sub = await page.$$eval(".fl-tiles .fl-item .fl-tile-sub", (els) => els.map((e) => e.textContent).join(" | "));
+  if (/[0-9a-f]{12}/.test(sub) && !sub.includes("2026")) throw new Error(`tiles show a hidden column: ${sub}`);
+  if (!sub.includes("2026")) throw new Error(`tiles don't show Created: ${sub}`);
+  await page.click(".segmented button:has-text('Details')");
+
+  // Reset columns: every column back, the value removed.
+  await headerMenu();
+  await page.click(".cm-item:has-text('Reset columns')");
+  await page.waitForSelector(".fl-head-wrap[data-col='id']");
+  await page.waitForSelector(".fl-head-wrap[data-col='size']");
+  if ((await value()) !== undefined) throw new Error("Reset columns didn't remove the value");
 };

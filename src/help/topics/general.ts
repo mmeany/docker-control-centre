@@ -11,7 +11,7 @@ export const generalTopics = {
 - **Tabs** each keep their own back and forward history. Right-click an item for **Open in new tab**.
 - **Show** above the tree: the tree shows running items and problems by default. Choose *Running and stopped* or *Everything* to see more, or click a "+ n more" row to reveal one branch. Lists on the right always show everything.
 - **Details pane** (Alt+Shift+P): properties of the selected item, on the right.
-- **Columns:** click a heading to sort. Drag a heading's right edge to resize it, or double-click the edge to fit the widest row on screen. Right-click the headings for **Reset column widths**. Widths are remembered for each kind of list, such as all projects' containers.
+- **Columns:** click a heading to sort. Drag a heading's right edge to resize it, or double-click the edge to fit the widest row on screen. Right-click the headings to tick the columns you want (Name always shows), **Reset column widths** or **Reset columns** (widths and every column back). Widths and hidden columns are remembered for each kind of list, such as all projects' containers.
 
 ### Colours
 
