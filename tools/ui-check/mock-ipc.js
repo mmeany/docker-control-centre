@@ -446,6 +446,40 @@
       const unchecked = project === "monitoring" ? [{ service: "grafana", image: "grafana/grafana:11.4.0", build: false }] : [];
       return { project, findings, unchecked, configError: null };
     },
+    // A small stand-in for Rust's editor: web's volume goes in compose.yml;
+    // the worker is left to do by hand (as if it merged settings with <<:).
+    compose_name_volumes: (a) => {
+      const files = a.target.files.map((path) => handlers.compose_read_file({ path }));
+      const valid = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+      const issues = [];
+      a.volumes.forEach((v, index) => {
+        if (!valid.test(v.key)) issues.push({ index, field: "key", message: "Use letters, digits, _ . or -, starting with a letter or digit." });
+        if (!valid.test(v.name)) issues.push({ index, field: "name", message: "Use letters, digits, _ . or -, starting with a letter or digit." });
+        else if (volumes.some((x) => x.name === v.name)) issues.push({ index, field: "name", message: `A volume called ${v.name} already exists.` });
+      });
+      const manual = [];
+      const revised = files.map((f) => f.text);
+      const top = [];
+      for (const v of a.volumes) {
+        if (v.service === "web" && files[0]) {
+          revised[0] = revised[0].replace('      - "8080:80"\n', `      - "8080:80"\n    volumes:\n      - ${v.key}:${v.target}\n`);
+          top.push(`  ${v.key}:\n    name: ${v.name}\n`);
+        } else
+          manual.push({
+            service: v.service,
+            target: v.target,
+            reason: "The service merges settings from elsewhere (<<:).",
+            snippet: `services:\n  ${v.service}:\n    volumes:\n      - ${v.key}:${v.target}\nvolumes:\n  ${v.key}:\n    name: ${v.name}\n`,
+          });
+      }
+      if (top.length) revised[0] += `\nvolumes:\n${top.join("")}`;
+      return {
+        files: files.map((f, i) => ({ path: f.path, original: f.text, revised: revised[i], changed: revised[i] !== f.text, backupExists: false })),
+        manual,
+        issues,
+      };
+    },
+    compose_save_revision: () => null,
     save_text_file: () => null,
     compose_run: (a) => {
       const id = ++streamId;

@@ -79,7 +79,30 @@ To change the project, edit its files and choose **Up** again.`,
 
 The list comes from compose's view of the files (only services, images and volume paths are read from it: the resolved config can hold secrets), the images' VOLUMEs and the containers. A service whose image isn't on the engine can't be checked: pull it (or build it) first.
 
-Enter (or a double-click) opens the volume a container holds now. Right-click to open its container or copy a name.`,
+Enter (or a double-click) opens the volume a container holds now. Right-click to open its container or copy a name.
+
+**Name volumes…** gives each one a name in the compose files, so the volumes list shows that name instead of a hash.`,
+  },
+  "compose.name": {
+    title: "Name volumes",
+    body: `Gives the project's unnamed volumes names in its compose files. Each ticked volume gets:
+
+- an entry in its service's \`volumes:\` list (\`- key:/path\`), or its \`- /path\` line gets the key as its source
+- a key under the top-level \`volumes:\` with \`name:\`, so Docker calls the volume exactly that
+
+Edit the key or name if you want others. A key the files already have, or a name another volume already has, is marked and blocks saving.
+
+The change goes in the file that already lists the service's volumes, else the file that defines the service. Comments and layout are kept. Each changed file has a tab with its diff.
+
+| Button | What it does |
+|---|---|
+| Copy | Copies the revised file shown |
+| Save as… | Saves the revised file somewhere else |
+| Save in place | Copies each file to \`<file>.bak\`, then saves the revised one in its place. It refuses if the file changed since the dialog read it |
+
+Some files can't be changed safely: flow style (\`[...]\`), anchors, aliases or \`<<:\` merges on the service, \`extends\`, or volume entries written with variables. Those volumes are listed with a snippet to add by hand.
+
+After saving, the project still runs on the old unnamed volumes until it's recreated. Up makes new, empty named volumes: the data in the old ones isn't copied.`,
   },
   "compose.run": {
     title: "Compose output",

@@ -1,6 +1,7 @@
 // A compose project's unnamed volumes (/compose/<project>/volumes): the list
 // with causes and proposed names, opening the volume a container holds, a
-// service whose image can't be checked, and the dashboard's board.
+// service whose image can't be checked, the Name volumes dialog (diff,
+// snippet fallback, name clash, save) and the dashboard's board.
 module.exports = async (page, { shot }) => {
   await page.waitForSelector(".status-bar:has-text('ubuntu-dev · tcp://localhost:2375')");
   const go = async (address) => {
@@ -25,6 +26,26 @@ module.exports = async (page, { shot }) => {
   // Enter opens the volume the container holds.
   await web.dblclick();
   await page.waitForSelector(".props-table td:has-text('shop-web-1:/var/cache/nginx')");
+
+  // Name volumes: web's goes in the file, the worker's is left as a snippet.
+  await go("/compose/shop/volumes");
+  await page.click(".cmd-btn:has-text('Name volumes')");
+  const dlg = page.locator(".name-volumes-dialog");
+  await dlg.locator(".diff-line.add:has-text('- web-nginx:/var/cache/nginx')").waitFor();
+  await dlg.locator(".diff-line.add:has-text('name: shop-web-nginx')").waitFor();
+  await dlg.locator(".name-volumes-manual:has-text('worker /tmp/cache has to be named by hand')").waitFor();
+  await shot("compose-name-volumes");
+
+  // A name another volume has blocks saving.
+  const save = dlg.locator("button:has-text('Save in place')");
+  await dlg.locator("input[aria-label='Name for /var/cache/nginx']").fill("shop_pgdata");
+  await dlg.locator(".field-error:has-text('A volume called shop_pgdata already exists.')").waitFor();
+  if (await save.isEnabled()) throw new Error("Save in place should wait on the clash");
+  await dlg.locator("input[aria-label='Name for /var/cache/nginx']").fill("shop-nginx-cache");
+  await dlg.locator(".diff-line.add:has-text('name: shop-nginx-cache')").waitFor();
+  await save.click();
+  await page.waitForSelector(".name-volumes-dialog", { state: "detached" });
+  await page.waitForSelector(":text('Saved compose.yml')");
 
   // A service whose image isn't pulled.
   await go("/compose/monitoring/volumes");
