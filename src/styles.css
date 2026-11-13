@@ -363,8 +363,9 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 }
 .cm-item {
   display: flex; justify-content: space-between; gap: 24px; width: 100%;
-  padding: 4px 22px 4px 26px; border: none; background: none; text-align: left;
+  padding: 4px 22px 4px 26px; border: none; background: none; text-align: left; position: relative;
 }
+.cm-check { position: absolute; left: 9px; }
 .cm-item:hover:not(:disabled) { background: var(--hover); }
 .cm-item:disabled { color: var(--disabled); }
 .cm-item.bold { font-weight: 600; }

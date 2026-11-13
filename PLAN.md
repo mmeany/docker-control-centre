@@ -466,7 +466,7 @@ reset), plus show / hide and a last column that fills the pane.
 | Pop-outs | Use and save the same values. Lists read a module store (`state/columns.ts`) the shell seeds from the settings it loads; a drag updates it and saves on release. A pop-out loads settings when it opens, so it starts from the main window's layout; a change made in a pop-out reaches the main window at its next start (`set_value` is per key, so the last write wins and nothing else is lost) |
 | Settings | A "Reset all column layouts" button, with a confirm, removes every `columns.*` value |
 | Keyboard | No new shortcuts |
-| Delivery | Three commits: 14.1 ✅ FileList resize, fit, fill, remember, and the header menu with Reset column widths; 14.2 show / hide (adds the ticks and Reset columns); 14.3 data-tables and the Settings reset |
+| Delivery | Three commits: 14.1 ✅ FileList resize, fit, fill, remember, and the header menu with Reset column widths; 14.2 ✅ show / hide (adds the ticks and Reset columns); 14.3 data-tables and the Settings reset |
 
 ### Work
 

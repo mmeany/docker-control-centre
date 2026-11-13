@@ -1,7 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export type MenuItem =
-  | { label: string; onClick: () => void; disabled?: boolean; shortcut?: string; bold?: boolean }
+  | {
+      label: string;
+      onClick: () => void;
+      disabled?: boolean;
+      shortcut?: string;
+      bold?: boolean;
+      /** A tick item (shown / hidden): ticked when true. */
+      checked?: boolean;
+    }
   | "separator";
 
 interface Props {
@@ -53,13 +61,15 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
           <button
             key={i}
             className={`cm-item ${item.bold ? "bold" : ""}`}
-            role="menuitem"
+            role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={item.checked}
             disabled={item.disabled}
             onClick={() => {
               onClose();
               item.onClick();
             }}
           >
+            {item.checked && <span className="cm-check" aria-hidden>✓</span>}
             <span>{item.label}</span>
             {item.shortcut && <span className="cm-shortcut">{item.shortcut}</span>}
           </button>

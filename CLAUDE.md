@@ -183,11 +183,14 @@ docs/                       WSL-SETUP.md, screenshots (from ui:check)
   `shell.view`; the shell keeps it per place). Sort, multi-select, keyboard,
   context menu, `dimmed` rows. Fixed ROW_H = 22px, must match `.fl-row` CSS.
   Columns resize (drag a header edge, double-click to fit the rendered
-  rows, header right-click resets), the last one fills the pane, and the
-  list scrolls sideways with the header in step. Pass a `columnsKey` (the
-  kind of list: `containers`, `compose.project`, `files`, ...): widths are
-  kept in settings values `columns.<key>` by `state/columns.ts`, a module
-  store the shell seeds when settings load (so FileList needs no Shell).
+  rows), the last one fills the pane, and the list scrolls sideways with
+  the header in step. Header right-click: a tick per column (the first
+  can't be hidden; a hidden sort column falls back to it; tiles use the
+  visible 2nd / 3rd), Reset column widths, Reset columns. Pass a
+  `columnsKey` (the kind of list: `containers`, `compose.project`, `files`,
+  ...): widths and hidden ids are kept in settings values `columns.<key>`
+  by `state/columns.ts`, a module store the shell seeds when settings load
+  (so FileList needs no Shell). `ContextMenu` items take `checked`.
 - `Board`: the dashboard's list. Takes the same `columns` / `rows` as
   FileList and the section's selection and context menu; adds tick boxes,
   inline `actions(key)`, a More button (the context menu), a `bulk` bar for
@@ -380,7 +383,7 @@ Details in `PLAN.md`.)
 13. ✅ In-app help (see PLAN.md, M13): F1 or a ? button opens a short
     Markdown topic for the current view or dialog (per layout at list
     levels), with General help; a Connecting topic while disconnected.
-14. Adjustable columns (see PLAN.md, M14; 14.1 ✅): drag a header edge to resize,
+14. Adjustable columns (see PLAN.md, M14; 14.1 ✅, 14.2 ✅): drag a header edge to resize,
     double-click to fit, the last column fills the pane; header menu to
     show / hide columns and reset; inspect tables resizable too; remembered
     per list kind in settings values (`columns.*`). 14.1 resize, 14.2 show /
