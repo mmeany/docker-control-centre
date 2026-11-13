@@ -1,7 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-13)
 
+- **Unnamed volumes:** anonymous volumes are named in the volumes list by
+  the container and path that mount them, and a container's Mounts say why
+  Docker made each one (an image VOLUME nothing is mounted over, or a
+  volume asked for with no name). Each Compose project has an Unnamed
+  volumes view (`/compose/<project>/volumes`) listing them with their
+  service, cause, the volume held now and a proposed name. **Name volumes**
+  revises the compose files as a text edit (comments, indent and line
+  endings kept), shows a diff per file and offers Copy, Save as or Save in
+  place (after a `.bak`, refused if the file changed since it was read).
+  Files it can't edit safely (flow style, anchors, variables and so on)
+  get a snippet to add by hand. **Save and move data** also stops the
+  project, makes the named volumes, copies each old volume's data into its
+  new one and brings the project up; old volumes are never deleted.
+- **Adjustable columns:** drag a list heading's edge to resize a column,
+  double-click it to fit, and right-click the headings to show or hide
+  columns or reset them. The last column fills the pane. Inspect tables
+  (environment, labels, mounts, ports, networks, Used by, image history)
+  resize too. Layouts are remembered per kind of list or table, and
+  Settings can reset them all.
+- Stopped containers show their configured ports, faded, in lists, the
+  details pane and the Ports view (published when the container starts).
 - **Help:** F1, or the ? button (at the end of the command bar, and in
   a pop-out's status bar), shows help for the view you're on: a short topic
   for each list, container view, compose view and resource, with its own
